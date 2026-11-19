@@ -227,7 +227,8 @@ class JanelaConversa(Janela):
             return linhas
         papel = v["papel"]
         if papel == "voce":
-            nome = (C.heroi(a.b) or {}).get("nome") or "você"
+            h = C.heroi(a.b)
+            nome = h["nome"] if h is not None else "você"
             larg = max(12, w - 4)
             corpo = _md_linhas(a, v["texto"], larg, "forte")
             linhas = [Text("")]
