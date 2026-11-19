@@ -91,17 +91,53 @@ class JanelaArcos(Janela):
         return [("↑ ↓", "escolhe o arco"), ("enter", "mostra as quests do arco"), ("n", "novo arco"), ("e", "edita o arco e o chefe")]
 
 
-ABAS = [("hoje", "hoje"), ("semana", "semana"), ("arco", "arco"), ("rascunhos", "rascunhos"), ("feitas", "feitas")]
+ABAS = [("hoje", "hoje"), ("semana", "semana"), ("arco", "arco"), ("rascunhos", "rascunhos"), ("feitas", "feitas"),
+        ("arvore", "árvore")]
+
+
+def _montar_arvore(qs: list[dict]) -> list[dict]:
+    """Ordena quests de um arco em árvore por dependências (suporta múltiplos pré-requisitos)."""
+    por_id = {q["id"]: q for q in qs}
+    filhos: dict[int, list[dict]] = {q["id"]: [] for q in qs}
+    raizes: list[dict] = []
+    for q in qs:
+        deps = [d for d in q.get("depende_de") or [] if d in por_id]
+        if not deps:
+            raizes.append(q)
+        else:
+            filhos[deps[0]].append(q)
+    saida: list[dict] = []
+    vistos: set[int] = set()
+
+    def visitar(q: dict, prefixo: str, ultimo: bool, raiz: bool) -> None:
+        if q["id"] in vistos:
+            return
+        vistos.add(q["id"])
+        deps = [d for d in q.get("depende_de") or [] if d in por_id]
+        galho = "" if raiz else ("└─ " if ultimo else "├─ ")
+        extra = f" [+{','.join('#' + str(d) for d in deps[1:])}]" if len(deps) > 1 else ""
+        saida.append({**q, "_arvore": prefixo + galho, "_converge": extra})
+        prox_pref = prefixo + ("" if raiz else ("   " if ultimo else "│  "))
+        sub = filhos.get(q["id"], [])
+        for i, f in enumerate(sub):
+            visitar(f, prox_pref, i == len(sub) - 1, False)
+
+    for r in raizes:
+        visitar(r, "", True, True)
+    for q in qs:
+        if q["id"] not in vistos:
+            visitar(q, "", True, True)
+    return saida
 
 
 class JanelaQuests(Janela):
     NOME = "quests"
     DEFAULT_CSS = """
-    JanelaQuests { height: 27; }
+    JanelaQuests { height: 1fr; }
     JanelaQuests Abas { margin-top: 1; }
     JanelaQuests #q-cab { height: 2; margin-top: 1; }
     JanelaQuests Lista { height: 1fr; }
-    JanelaQuests #q-pe { height: 4; }
+    JanelaQuests #q-pe { height: 3; }
     """
 
     def compose(self) -> ComposeResult:
@@ -126,8 +162,10 @@ class JanelaQuests(Janela):
             return sorted(fs, key=lambda q: -(q["concluida"] or 0))[:60]
         ar = a.b.um("SELECT nome FROM arcos WHERE id = ?", (p.arco_id,))
         if not ar:
-            return C.quests(a.b, a.cfg, dia, "aberta")
-        return [q for q in C.quests(a.b, a.cfg, dia, arco=ar[0]) if q["estado"] != "rascunho"]
+            qs = C.quests(a.b, a.cfg, dia, "aberta")
+            return _montar_arvore(qs) if p.aba == "arvore" else qs
+        qs = [q for q in C.quests(a.b, a.cfg, dia, arco=ar[0]) if q["estado"] != "rascunho"]
+        return _montar_arvore(qs) if p.aba == "arvore" else qs
 
     def pintar(self) -> None:
         a = self.app
@@ -174,6 +212,27 @@ class JanelaQuests(Janela):
             icone, cor = ic("andamento"), "yellow"
         else:
             icone, cor = ic("pendente"), "texto"
+        if self.pg.aba == "arvore" and q.get("_arvore"):
+            tit = Text()
+            tit.append(q["_arvore"], style=a.cor("accent"))
+            tit.append(icone + " ", style=a.cor(cor))
+            if q.get("bloqueada") and not feita:
+                tit.append("🔒 ", style=a.cor("yellow"))
+            tit.append(q["titulo"], style=a.cor("mudo") if (feita or q.get("bloqueada")) else a.cor("texto"))
+            if q.get("_converge"):
+                tit.append(q["_converge"], style=a.cor("yellow"))
+            pom = D.pontos(a, q["feitos"], q["est"])
+            pom.append(f"  {q['feitos']}/{q['est']}", style=a.cor("mudo"))
+            rec = D.xp_bits(a, q["xp"], q["bits"], mudo=bool(feita))
+            t = Text(no_wrap=True)
+            t.append_text(ajustar(tit, c1))
+            t.append(" ")
+            t.append_text(ajustar(pom, c2))
+            t.append(" ")
+            t.append_text(ajustar(D.diamantes(a, q["dif"]), c3))
+            t.append(" ")
+            t.append_text(ajustar(rec, c4, "right"))
+            return [t, Text("")]
         tit = Text()
         tit.append(icone + " ", style=a.cor(cor))
         if q.get("bloqueada") and not feita:
@@ -256,7 +315,7 @@ class JanelaQuests(Janela):
 
 class JanelaQuest(Janela):
     NOME = "quest"
-    DEFAULT_CSS = "JanelaQuest { width: 1fr; height: 27; } JanelaQuest Lista { margin-top: 1; }"
+    DEFAULT_CSS = "JanelaQuest { width: 1fr; height: 1fr; } JanelaQuest Lista { margin-top: 1; }"
 
     def compose(self) -> ComposeResult:
         yield Lista(self._linha, id="quest-detalhe", selecionavel=lambda it: it[0] == "sub", cursor_apagado=True)
@@ -358,10 +417,10 @@ class JanelaQuest(Janela):
 
 class JanelaRascunhos(Janela):
     NOME = "rascunhos"
-    DEFAULT_CSS = "JanelaRascunhos Lista { margin-top: 1; height: 1fr; } JanelaRascunhos #r-pe { height: 1; }"
+    DEFAULT_CSS = "JanelaRascunhos { height: 10; } JanelaRascunhos Lista { margin-top: 1; height: 1fr; } JanelaRascunhos #r-pe { height: 1; }"
 
     def compose(self) -> ComposeResult:
-        yield Lista(self._linha, altura=5, id="r-lista", cursor_apagado=True)
+        yield Lista(self._linha, altura=3, id="r-lista", cursor_apagado=True)
         yield Pintado(self._pe, id="r-pe")
 
     def pintar(self) -> None:
@@ -383,13 +442,8 @@ class JanelaRascunhos(Janela):
         l2.append_text(D.diamantes(a, q["dif"]))
         if q["prazo"]:
             l2.append(f" · prazo {C.dia_curto(q['prazo'])}", style=a.cor("mudo"))
-        linhas = [D.linha_lr(t, d, w), l2, Text("  por quê: " + (q["porque"] or "o Mestre não disse"), style=a.cor("mudo"))]
-        if est.cursor and est.foco:
-            linhas.append(Text.assemble(("  a", a.cor("accent")), (" aprovar   ", a.cor("texto")), ("e", a.cor("accent")),
-                                        (" editar   ", a.cor("texto")), ("d", a.cor("accent")), (" descartar", a.cor("texto"))))
-        else:
-            linhas.append(Text(""))
-        linhas.append(Text(""))
+        linhas = [D.linha_lr(t, d, w), l2,
+                  Text("  " + ((q["porque"] or "sem descrição").replace("\n", " "))[:max(20, w - 4)], style=a.cor("mudo"))]
         return linhas
 
     def _pe(self, w: int) -> Text:
@@ -421,10 +475,10 @@ class PaginaQuests(Pagina):
         "rascunhos": {"esq": "arcos", "cima": "quests"},
     }
     BINDINGS = [Binding("n", "nova", show=False), Binding("space", "concluir", show=False), Binding("a", "aprovar", show=False),
-                Binding("A,shift+a", "aprovar_todos", show=False), Binding("e", "editar", show=False),
-                Binding("d", "descartar", show=False), Binding("plus", "hoje", show=False), Binding("f", "foco", show=False),
-                Binding("s", "subtarefa", show=False)]
-    DEFAULT_CSS = "PaginaQuests #q-dir { width: 1fr; } PaginaQuests #q-cima { height: 27; } PaginaQuests JanelaQuests { width: 70; }"
+                Binding("A,shift+a", "aprovar_todos", show=False), Binding("D,shift+d", "descartar_todos", show=False),
+                Binding("e", "editar", show=False), Binding("d", "descartar", show=False),
+                Binding("plus", "hoje", show=False), Binding("f", "foco", show=False), Binding("s", "subtarefa", show=False)]
+    DEFAULT_CSS = "PaginaQuests #q-dir { width: 1fr; } PaginaQuests #q-cima { height: 1fr; } PaginaQuests JanelaQuests { width: 58; }"
 
     def __init__(self, quest: int | None = None, **kw) -> None:
         super().__init__()
@@ -509,6 +563,9 @@ class PaginaQuests(Pagina):
 
     def action_aprovar_todos(self) -> None:
         self.app.pedir("aprovar_todos")
+
+    def action_descartar_todos(self) -> None:
+        self.app.pedir("descartar_todos_rascunhos")
 
     def action_descartar(self) -> None:
         from oma_rpg.ui.dialogos import Confirmar
