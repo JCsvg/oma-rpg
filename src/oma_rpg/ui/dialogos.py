@@ -1,0 +1,836 @@
+"""Diálogos (tela 10 do design): nível alcançado, abandonar o pomodoro, desmaio, concluir quest (check-in), aprovar
+rascunho, carta do dia, editar quest, novo arco, confirmar, busca, teclas e repositórios. enter confirma · esc fecha.
+
+A base (Dialogo com clique fora fechando e Tab entre os campos) vem do oma-mail.
+"""
+
+from __future__ import annotations
+
+from rich.text import Text
+from textual import events, on
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.markup import escape
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Input, Static
+
+from oma_rpg.nucleo import consultas as C
+from oma_rpg.nucleo import regras
+from oma_rpg.ui import desenho as D
+from oma_rpg.ui.fonte import grande
+from oma_rpg.ui.icones import ic
+from oma_rpg.ui.lista import Lista, ajustar
+from oma_rpg.ui.widgets import Botao, Pintado
+
+_CSS = """
+{n} { align: center middle; background: $background 60%; }
+{n} #caixa { width: 60; max-width: 100%; height: auto; max-height: 92%; background: $background; border: solid $accent;
+             border-title-color: $accent; border-title-style: bold; padding: 0 2; }
+{n} .linha-texto { height: auto; }
+{n} #botoes { height: 1; margin-top: 1; }
+{n} #botoes Botao { margin-right: 2; }
+{n} .pe { height: 1; margin-top: 1; }
+{n} .rot { width: 14; color: $rpg-mudo; }
+{n} .campo { height: 1; margin-bottom: 0; }
+{n} Input { width: 1fr; }
+"""
+
+
+def css(nome: str, extra: str = "") -> str:
+    return _CSS.replace("{n}", nome) + extra
+
+
+def pe(app, itens: list[tuple[str, str]]) -> Text:
+    t = Text(no_wrap=True)
+    for n, (k, rot) in enumerate(itens):
+        if n:
+            t.append("   ")
+        t.append(k, style=app.cor("accent"))
+        t.append(" " + rot, style=app.cor("mudo"))
+    return t
+
+
+class Dialogo(ModalScreen):
+    BINDINGS = [Binding("escape", "cancelar", "fechar", priority=True)]
+
+    def action_cancelar(self) -> None:
+        self.dismiss(None)
+
+    def mover_janela(self, direcao: str) -> None:
+        (self.focus_next if direcao in ("dir", "baixo") else self.focus_previous)()
+
+    def on_click(self, ev: events.Click) -> None:
+        if ev.widget is self:
+            self.action_cancelar()
+
+    @on(Botao.Apertado)
+    def _botao(self, ev: Botao.Apertado) -> None:
+        ev.stop()
+        self.apertou(ev.botao.id or "")
+
+    def apertou(self, bid: str) -> None:
+        pass
+
+
+# ---------------------------------------------------------------- corpos (também usados na vitrine das capturas)
+def corpo_nivel(app, d: dict) -> list[Text]:
+    a = app
+    linhas = [Text(""), ajustar(Text(ic("festa"), style=a.cor("yellow")), 52, "center"), Text("")]
+    for l in grande(f"NIVEL {d['nivel']}"):
+        linhas.append(ajustar(Text(l, style=a.cor("green")), 52, "center"))
+    linhas.append(Text(""))
+    linhas.append(ajustar(Text(f"+{d.get('pontos', 1)} ponto de skill  ·  +{d.get('hp', 10)} de HP  ·  +{d.get('bits', 25)} bits",
+                               style=a.cor("texto")), 52, "center"))
+    if d.get("titulo"):
+        linhas.append(ajustar(Text(f"novo título: {d['titulo']}", style=a.cor("blue")), 52, "center"))
+    return linhas
+
+
+def corpo_abandonar(app) -> list[Text]:
+    a = app
+    dec = a.decorrido()
+    h = C.heroi(a.b)
+    P = C.passivos(a.b, a.cfg, a.hoje(), h)
+    pc = a.cfg["pomodoro"]
+    livre = dec < pc["abandono_livre_min"] * 60
+    mult = (2.0 if C.tem_efeito(a.b, "arriscar") else 1.0) * (P["abandono_mult"] or 1.0)
+    custo = regras.arred(pc["abandono_hp"] * max(0.0, 1 - P["abandono_hp"] / 100) * mult)
+    cmb = C.combo_de(a.cfg, h, P, a._atual_row["inicio"]) if a._atual_row is not None else 1.0
+    linhas = [Text(""), Text(f"Você fez {int(dec // 60)} de {pc['minutos_foco']} minutos.", style=a.cor("texto")), Text("")]
+    if livre:
+        linhas.append(Text(f"antes de {pc['abandono_livre_min']} min: abandonar não custa HP nem combo", style=a.cor("green")))
+    else:
+        linhas.append(Text(f"abandonar custa {custo} HP e zera o combo x{cmb:.1f}", style=a.cor("red")))
+    g = _skill_guardar(a, h)
+    if g:
+        s = a.cfg.skill(g)
+        linhas += [Text(""), Text(f"{s['nome']} guarda o pomodoro e mantém o combo", style=a.cor("green")),
+                   Text(f"({C.custo_mana(a.cfg, s, P)} mana, você tem {h['mp']})", style=a.cor("mudo"))]
+    return linhas
+
+
+def _skill_guardar(a, h) -> str | None:
+    for sid in C.ativas(a.b, a.cfg, h):
+        if a.cfg.skill(sid)["efeito"] == "guardar" and not C.uso_hoje(a.b, sid, a.hoje()):
+            return sid
+    return None
+
+
+def corpo_desmaio(app, d: dict) -> list[Text]:
+    a = app
+    linhas = [Text(""), Text.assemble((ic("coracao_partido") + " ", a.cor("red")), ("o HP chegou a 0", f"bold {a.cor('forte')}")),
+              Text("")]
+    linhas.append(Text("• perdeu o streak de hoje" + (" (backup guardou o de ontem)" if d.get("backup") else ""), style=a.cor("texto")))
+    linhas.append(Text(f"• perdeu 10% dos bits: -{d.get('bits', 0)}", style=a.cor("texto")))
+    linhas.append(Text("• o nível e as skills continuam com você", style=a.cor("texto")))
+    linhas += [Text(""), Text("acorda com 50% de HP depois de uma pausa longa", style=a.cor("mudo"))]
+    return linhas
+
+
+def corpo_carta(app, buff: str, debuff: str, revelada: bool = True) -> list[Text]:
+    a = app
+    b, db = a.cfg["cartas"][buff], a.cfg["cartas"][debuff]
+    cor = a.cor("magenta")
+    vazio = ["┌───────┐", "│       │", "│   ☆   │", "│       │", "│       │", "└───────┘"]
+    meio = ["┌───────┐", f"│{b['numero']:^7}│", f"│{'✦':^7}│", "│       │", f"│{b['nome'].split()[-1].upper()[:7]:^7}│", "└───────┘"]
+    lado = [("buff", a.cor("mudo")), (b["curto"], a.cor("green")), ("", ""), ("debuff", a.cor("mudo")), (db["curto"], a.cor("red")), ("", "")]
+    linhas = [Text("")]
+    for i in range(6):
+        t = Text("  ")
+        t.append(vazio[i], style=a.cor("mudo"))
+        t.append("  ")
+        t.append(meio[i] if revelada else vazio[i], style=cor if revelada else a.cor("mudo"))
+        t.append("  ")
+        t.append(vazio[i], style=a.cor("mudo"))
+        t.append("   ")
+        t.append(lado[i][0], style=lado[i][1] or a.cor("mudo"))
+        linhas.append(t)
+    linhas += [Text(""), Text(f"{b['nome']}: {b['desc']}", style=a.cor("texto")), Text(f"{db['nome']}: {db['desc']}", style=a.cor("red"))]
+    return linhas
+
+
+class _Simples(Dialogo):
+    """Diálogo de texto com o pé de teclas e um botão principal."""
+
+    BORDA = "accent"
+    TITULO = ""
+    LARGURA = 60
+
+    def linhas(self) -> list[Text]:
+        return []
+
+    def teclas_pe(self) -> list[tuple[str, str]]:
+        return [("esc", "fecha")]
+
+    def botoes(self) -> list[tuple[str, str, str]]:
+        return []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = escape(self.TITULO)
+            c.styles.width = self.LARGURA
+            c.styles.border = ("solid", self.app.cor(self.BORDA))
+            c.styles.border_title_color = self.app.cor(self.BORDA)
+            yield Static(D.juntar(self.linhas()), classes="linha-texto")
+            if self.botoes():
+                with Horizontal(id="botoes"):
+                    for bid, rot, cls in self.botoes():
+                        yield Botao(rot, id=bid, classes=cls)
+            yield Static(pe(self.app, self.teclas_pe()), classes="pe")
+
+    def on_mount(self) -> None:
+        b = list(self.query(Botao))
+        if b:
+            b[0].focus()
+
+
+class Nivel(_Simples):
+    DEFAULT_CSS = css("Nivel")
+    TITULO = "nível alcançado"
+
+    def __init__(self, d: dict) -> None:
+        super().__init__()
+        self.d = d
+
+    def linhas(self):
+        return corpo_nivel(self.app, self.d)
+
+    def botoes(self):
+        return [("ok", "enter  continuar", "cheio")]
+
+    def teclas_pe(self):
+        return [("enter", "continuar"), ("alt+4", "gastar o ponto")]
+
+    def apertou(self, bid: str) -> None:
+        self.dismiss(True)
+
+
+class Desmaio(_Simples):
+    DEFAULT_CSS = css("Desmaio")
+    TITULO = "você desmaiou"
+    BORDA = "red"
+    LARGURA = 64
+
+    def __init__(self, d: dict) -> None:
+        super().__init__()
+        self.d = d
+
+    def linhas(self):
+        return corpo_desmaio(self.app, self.d)
+
+    def botoes(self):
+        return [("ok", "enter  acordar", "cheio")]
+
+    def teclas_pe(self):
+        return [("enter", "fecha (acorda sozinho em 15 min)")]
+
+    def apertou(self, bid: str) -> None:
+        self.app.pedir("acordar", avisar_erro=False)
+        self.dismiss(True)
+
+
+class Abandonar(_Simples):
+    DEFAULT_CSS = css("Abandonar")
+    TITULO = "abandonar o pomodoro?"
+    BORDA = "yellow"
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("s", "guardar"), Binding("x", "abandonar")]
+
+    def linhas(self):
+        return corpo_abandonar(self.app)
+
+    def botoes(self):
+        b = [("voltar", "esc voltar", "cheio")]
+        if _skill_guardar(self.app, C.heroi(self.app.b)):
+            b.append(("guardar", "s guardar", ""))
+        b.append(("abandonar", "x abandonar", "vermelho"))
+        return b
+
+    def teclas_pe(self):
+        return [("s", "guardar"), ("x", "abandonar"), ("esc", "voltar")]
+
+    def action_guardar(self) -> None:
+        sid = _skill_guardar(self.app, C.heroi(self.app.b))
+        if sid:
+            self.app.pedir("usar_skill", {"skill": sid})
+            self.dismiss(True)
+
+    def action_abandonar(self) -> None:
+        self.app.pedir("abandonar")
+        self.dismiss(True)
+
+    def apertou(self, bid: str) -> None:
+        if bid == "guardar":
+            self.action_guardar()
+        elif bid == "abandonar":
+            self.action_abandonar()
+        else:
+            self.dismiss(None)
+
+
+class Carta(_Simples):
+    DEFAULT_CSS = css("Carta")
+    TITULO = "carta do dia (Jovem Místico)"
+    BORDA = "magenta"
+    LARGURA = 64
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("space", "tirar")]
+
+    def __init__(self, buff: str, debuff: str) -> None:
+        super().__init__()
+        self.buff, self.debuff = buff, debuff
+        self.revelada = False
+
+    def linhas(self):
+        return corpo_carta(self.app, self.buff, self.debuff, self.revelada)
+
+    def botoes(self):
+        return [("tirar", "espaço  tira a carta", "cheio")]
+
+    def teclas_pe(self):
+        return [("espaço", "tira"), ("esc", "depois")]
+
+    def action_tirar(self) -> None:
+        if self.revelada:
+            self.dismiss(True)
+            return
+        self.revelada = True
+        self.app.pedir("revelar_carta")
+        self.query_one(".linha-texto", Static).update(D.juntar(self.linhas()))
+        self.query_one("#tirar", Botao).label = "enter  continuar"
+
+    def apertou(self, bid: str) -> None:
+        self.action_tirar()
+
+
+class Confirmar(_Simples):
+    DEFAULT_CSS = css("Confirmar")
+    BORDA = "yellow"
+
+    def __init__(self, titulo: str, linhas: list[str], rotulo: str = "confirmar") -> None:
+        super().__init__()
+        self.TITULO = titulo
+        self._linhas, self.rotulo = linhas, rotulo
+
+    def linhas(self):
+        return [Text("")] + [Text(l, style=self.app.cor("texto" if i == 0 else "mudo")) for i, l in enumerate(self._linhas)]
+
+    def botoes(self):
+        return [("nao", "cancelar", "cheio"), ("sim", self.rotulo, "vermelho")]
+
+    def teclas_pe(self):
+        return [("← →", "escolhe"), ("enter", "aperta"), ("esc", "cancela")]
+
+    def apertou(self, bid: str) -> None:
+        self.dismiss(bid == "sim")
+
+    def on_key(self, ev: events.Key) -> None:
+        if ev.key in ("left", "right", "h", "l"):
+            ev.stop()
+            self.focus_next()
+
+
+class Pedir(Dialogo):
+    DEFAULT_CSS = css("Pedir", "Pedir #campo { margin-top: 1; }")
+
+    def __init__(self, titulo: str, rotulo: str, valor: str = "") -> None:
+        super().__init__()
+        self.titulo, self.rotulo, self.valor = titulo, rotulo, valor
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = escape(self.titulo)
+            yield Static(Text(self.rotulo, style=self.app.cor("mudo")), classes="linha-texto")
+            yield Input(self.valor, id="campo")
+            yield Static(pe(self.app, [("enter", "salva"), ("esc", "volta")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        self.dismiss(ev.value.strip() or None)
+
+
+# ---------------------------------------------------------------- concluir quest (check-in)
+def info_conclusao(app, q: dict) -> tuple[Text, Text]:
+    a = app
+    cheio = q["feitos"] >= regras.xp_cheio_minimo(q["est"], a.cfg)
+    if q["feitos"] == 0:
+        t1 = Text(f"0 de {q['est']} pomodoros · sem pomodoro, 0 xp", style=a.cor("red"))
+    else:
+        xp = regras.xp_quest_concluida(q["est"], q["dif"], q["feitos"], a.cfg)
+        t1 = Text(f"{q['feitos']} de {q['est']} pomodoros · " + ("XP cheio" if cheio else f"{xp} de {q['xp']} xp (70% para o cheio)"),
+                  style=a.cor("green" if cheio else "yellow"))
+    com = a.b.todos("SELECT c.xp, r.caminho FROM commits c JOIN repos r ON r.id = c.repo_id JOIN pomodoros p "
+                    "ON c.pomodoro_inicio = p.inicio WHERE p.quest_id = ?", (q["id"],))
+    if com:
+        import os
+        onde = com[0]["caminho"].replace(os.path.expanduser("~"), "~")
+        t2 = Text.assemble((ic("commit") + " ", a.cor("blue")),
+                           (f"{len(com)} commit{'s' if len(com) > 1 else ''} em {onde} detectado{'s' if len(com) > 1 else ''}: "
+                            f"+{sum(c['xp'] for c in com)} xp", a.cor("texto")))
+    else:
+        t2 = Text("nenhum commit nos pomodoros desta quest", style=a.cor("mudo"))
+    return t1, t2
+
+
+class Concluir(Dialogo):
+    DEFAULT_CSS = css("Concluir", "Concluir #caixa { border: solid $success; border-title-color: $success; width: 62; } "
+                                  "Concluir #nota { margin: 0 0 1 0; }")
+
+    def __init__(self, q: dict) -> None:
+        super().__init__()
+        self.q = q
+
+    def compose(self) -> ComposeResult:
+        a = self.app
+        t1, t2 = info_conclusao(a, self.q)
+        with Vertical(id="caixa") as c:
+            c.border_title = "concluir quest"
+            yield Static(D.juntar([Text(""), Text(self.q["titulo"], style=f"bold {a.cor('forte')}"), t1, Text(""),
+                                   Text("o que você fez? (uma linha)", style=a.cor("mudo"))]), classes="linha-texto")
+            yield Input(placeholder="escrevi a 2.1 com 4 modelos e a tabela", id="nota")
+            yield Static(t2, classes="linha-texto")
+            yield Static(pe(a, [("enter", "concluir"), ("esc", "volta")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        self.app.pedir("concluir_quest", {"id": self.q["id"], "nota": ev.value.strip()})
+        self.dismiss(True)
+
+
+# ---------------------------------------------------------------- editar quest e aprovar rascunho
+class EditarQuest(Dialogo):
+    """Nova quest, editar quest ou aprovar rascunho (os mesmos campos). A recompensa aparece calculada, sem campo."""
+
+    DEFAULT_CSS = css("EditarQuest", """
+    EditarQuest #caixa { width: 70; }
+    EditarQuest .campo { height: 1; }
+    EditarQuest #conta { height: 3; margin-top: 1; }
+    """)
+    CAMPOS = [("titulo", "título"), ("materia", "matéria"), ("est", "pomodoros"), ("dif", "dificuldade"), ("arco", "arco"),
+              ("prazo", "prazo")]
+
+    def __init__(self, q: dict | None, aprovar: bool = False) -> None:
+        super().__init__()
+        self.q = q
+        self.aprovar = aprovar
+
+    def compose(self) -> ComposeResult:
+        a = self.app
+        q = self.q or {}
+        if self.aprovar:
+            titulo = f"aprovar rascunho #{q.get('id')}"
+        else:
+            titulo = "editar quest" if q else "nova quest"
+        with Vertical(id="caixa") as c:
+            c.border_title = titulo
+            yield Static("")
+            for k, rot in self.CAMPOS:
+                v = q.get(k, "")
+                if k == "dif":
+                    v = str(q.get("dif", 2))
+                elif k == "est":
+                    v = str(q.get("est", 1))
+                with Horizontal(classes="campo"):
+                    yield Static(rot, classes="rot")
+                    yield Input(str(v or ""), id=f"c-{k}", placeholder={"prazo": "AAAA-MM-DD", "dif": "1 fácil, 2 média, 3 difícil",
+                                                                        "arco": "grupo, ex. Prova de Compiladores"}.get(k, ""))
+            if not q:
+                with Horizontal(classes="campo"):
+                    yield Static("tipo", classes="rot")
+                    yield Input("normal", id="c-tipo", placeholder="normal ou daily")
+            yield Pintado(self._conta, id="conta")
+            yield Static(pe(a, [("enter", "aprova" if self.aprovar else "salva"), ("tab", "campo"), ("esc", "volta")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self.query_one("#c-titulo", Input).focus()
+
+    def _valores(self) -> dict:
+        d = {}
+        for k, _ in self.CAMPOS:
+            d[k] = self.query_one(f"#c-{k}", Input).value.strip()
+        if not self.q:
+            d["tipo"] = self.query_one("#c-tipo", Input).value.strip() or "normal"
+        return d
+
+    def _conta(self, w: int) -> Text:
+        a = self.app
+        d = self._valores() if self.is_mounted and self.query("#c-est") else {"est": "1", "dif": "2"}
+        try:
+            from oma_rpg.nucleo.jogo import dificuldade
+            est, dif = int(d["est"]), dificuldade(d["dif"])
+            xp = regras.xp_quest(est, dif, a.cfg)
+            t = Text.assemble(("XP e Bits: ", a.cor("yellow")), (f"{xp} · {regras.bits_de(xp, a.cfg)}", f"bold {a.cor('yellow')}"),
+                              (" (tabela do jogo)", a.cor("yellow")))
+            conta = Text(f"{a.cfg['quest']['xp_por_pomodoro']} × {est} × {regras.mult_dif(dif, a.cfg)}".replace(".", ","),
+                         style=a.cor("mudo"))
+        except Exception:
+            t, conta = Text("XP e Bits: preencha pomodoros (1 a 8) e dificuldade (1 a 3)", style=a.cor("mudo")), Text("")
+        nota = "o Mestre não escolhe esses valores" if self.aprovar else "o jogo calcula; não existe campo de recompensa"
+        return D.juntar([t, conta, Text(nota, style=a.cor("mudo"))])
+
+    def on_input_changed(self, ev: Input.Changed) -> None:
+        if ev.input.id in ("c-est", "c-dif"):
+            self.query_one("#conta", Pintado).pintar()
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        d = self._valores()
+        a = self.app
+        if self.q:
+            args = {"id": self.q["id"], **{k: v for k, v in d.items()}}
+            if self.q.get("estado") == "rascunho":
+                def depois(ok, r):
+                    if ok and self.aprovar:
+                        a.pedir("aprovar", {"id": self.q["id"]})
+                    if ok:
+                        self.dismiss(True)
+                a.pedir("editar_quest", args, depois)
+            else:
+                a.pedir("editar_quest", args, lambda ok, r: ok and self.dismiss(True))
+        else:
+            a.pedir("nova_quest", d, lambda ok, r: ok and self.dismiss(True))
+
+
+class NovoArco(Dialogo):
+    DEFAULT_CSS = css("NovoArco")
+
+    def __init__(self, arco: dict | None = None) -> None:
+        super().__init__()
+        self.arco = arco
+
+    def compose(self) -> ComposeResult:
+        ar = self.arco or {}
+        with Vertical(id="caixa") as c:
+            c.border_title = "editar arco" if self.arco else "novo arco"
+            yield Static("")
+            for k, rot, ph in (("nome", "nome", "ex. Compiladores"), ("chefe", "chefe", "ex. Prova de Compiladores"),
+                               ("data", "data do chefe", "AAAA-MM-DD")):
+                with Horizontal(classes="campo"):
+                    yield Static(rot, classes="rot")
+                    yield Input(str(ar.get(k, "") or ""), id=f"a-{k}", placeholder=ph)
+            yield Static(Text("vencer todas as quests do arco até a data dá o bônus do chefe", style=self.app.cor("mudo")),
+                         classes="linha-texto")
+            yield Static(pe(self.app, [("enter", "salva"), ("tab", "campo"), ("esc", "volta")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self.query_one("#a-nome", Input).focus()
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        d = {k: self.query_one(f"#a-{k}", Input).value.strip() for k in ("nome", "chefe", "data")}
+        if self.arco:
+            self.app.pedir("editar_arco", {"id": self.arco["id"], **d}, lambda ok, r: ok and self.dismiss(True))
+        else:
+            self.app.pedir("novo_arco", d, lambda ok, r: ok and self.dismiss(True))
+
+
+# ---------------------------------------------------------------- busca
+class Busca(Dialogo):
+    DEFAULT_CSS = css("Busca", """
+    Busca { align: center top; }
+    Busca #caixa { width: 64; margin-top: 1; height: auto; max-height: 30; }
+    Busca Lista { height: auto; max-height: 22; margin-top: 1; }
+    """)
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("down", "descer", priority=True),
+                Binding("up", "subir", priority=True)]
+
+    def __init__(self, inicial: str = "") -> None:
+        super().__init__()
+        self.inicial = inicial
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = "buscar quests, skills e itens da loja"
+            yield Input(self.inicial, id="busca-campo", placeholder="digite para buscar")
+            yield Lista(self._linha, id="busca-lista", cursor_sem_foco=True, selecionavel=lambda it: it[0] != "cab")
+            yield Static(pe(self.app, [("↑ ↓", "escolhe"), ("enter", "abre"), ("esc", "fecha")]), classes="pe")
+
+    def on_mount(self) -> None:
+        i = self.query_one(Input)
+        i.focus()
+        i.cursor_position = len(i.value)
+        self._buscar(self.inicial)
+
+    def _buscar(self, q: str) -> None:
+        a = self.app
+        q = q.strip().lower()
+        res: list = []
+        import unicodedata
+
+        def norm(s: str) -> str:
+            return "".join(c for c in unicodedata.normalize("NFKD", s.lower()) if not unicodedata.combining(c))
+        nq = norm(q)
+        if not nq:
+            for p, rot in (("painel", "painel"), ("foco", "foco"), ("quests", "quests"), ("skills", "skills"), ("loja", "loja"),
+                           ("historico", "histórico"), ("taverna", "taverna")):
+                res.append(("pagina", p, rot))
+        else:
+            qs = [q_ for q_ in C.quests(a.b, a.cfg, a.hoje()) if nq in norm(q_["titulo"] + " " + q_["materia"])][:8]
+            if qs:
+                res.append(("cab", "", "quests"))
+                res += [("quest", x["id"], x["titulo"]) for x in qs]
+            h = C.heroi(a.b)
+            sk = [s for s in a.cfg["skills"] if nq in norm(a.cfg.skill(s)["nome"] + " " + a.cfg.skill(s)["desc"])]
+            if h:
+                sk.sort(key=lambda s: a.cfg.skill(s)["classe"] != h["classe"])
+            if sk:
+                res.append(("cab", "", "skills"))
+                res += [("skill", s, f"{a.cfg.skill(s)['nome']} · {a.cfg.classe(a.cfg.skill(s)['classe'])['nome']}") for s in sk[:6]]
+            its = [i for i in a.cfg["itens"] if nq in norm(a.cfg.item(i)["nome"] + " " + a.cfg.item(i)["desc"])][:6]
+            if its:
+                res.append(("cab", "", "loja"))
+                res += [("item", i, a.cfg.item(i)["nome"]) for i in its]
+        self.query_one(Lista).definir(res, cursor=0)
+
+    def _linha(self, it, i, est) -> list[Text]:
+        a = self.app
+        tipo, _, rot = it
+        if tipo == "cab":
+            return [Text(rot, style=f"bold {a.cor('mudo')}")]
+        icone = {"quest": "quests", "skill": "skills", "item": "loja", "pagina": it[1]}.get(tipo, "ponto")
+        return [Text.assemble(("  " + ic(icone) + " ", a.cor("accent")), (rot, a.cor("texto")))]
+
+    def on_input_changed(self, ev: Input.Changed) -> None:
+        self._buscar(ev.value)
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        it = self.query_one(Lista).item_atual()
+        if it and it[0] != "cab":
+            self.dismiss((it[0], it[1]))
+
+    def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
+        ev.stop()
+        self.dismiss((ev.item[0], ev.item[1]))
+
+    def action_descer(self) -> None:
+        self.query_one(Lista).action_cursor(1)
+
+    def action_subir(self) -> None:
+        l = self.query_one(Lista)
+        if l._proximo(l.cursor, -1) >= 0:
+            l.action_cursor(-1)
+
+
+# ---------------------------------------------------------------- teclas e ajuda
+GLOBAIS = [("ctrl+← ↓ ↑ → ou ctrl+hjkl", "muda de janela"), ("← ↓ ↑ → ou hjkl", "anda dentro da janela"),
+           ("alt+← →", "troca de aba, camada ou categoria"), ("alt+↑ ↓", "move ou reordena o item (fila, quests)"),
+           ("alt+1 … alt+7", "vai direto para o painel"), ("tab / shift+tab", "próxima janela"), ("/", "busca"),
+           ("ctrl+espaço ou F1", "estas teclas"), ("?", "ajuda completa"), ("q", "sai (o serviço e o pomodoro continuam)")]
+POR_TELA = [
+    ("painel", [("enter", "abre"), ("f", "foco"), ("n", "nova quest"), ("t", "taverna")]),
+    ("foco", [("espaço", "pausa ou começa"), ("1-4", "usa skill"), ("x", "abandona"), ("s", "pula a pausa"),
+              ("alt+↑↓", "reordena a fila"), ("n", "anota")]),
+    ("quests", [("enter", "abre"), ("n", "nova"), ("espaço", "conclui"), ("a", "aprova rascunho"), ("e", "edita"),
+                ("d", "descarta"), ("+", "põe ou tira de hoje"), ("f", "foco nesta"), ("alt+← →", "aba")]),
+    ("skills", [("enter", "aprende"), ("← →", "ramo"), ("c", "classes"), ("r", "respec (bits)"), ("alt+← →", "outra classe")]),
+    ("classes", [("alt+← →", "troca"), ("enter", "vê a árvore"), ("t", "vira esta classe"), ("esc", "volta")]),
+    ("loja", [("enter", "compra"), ("u", "usa da mochila"), ("+ -", "quantidade"), ("alt+← →", "categoria")]),
+    ("histórico", [("← ↓ ↑ →", "dia"), ("alt+← →", "camada"), ("[ ]", "período"), ("enter", "detalhe")]),
+    ("taverna", [("enter", "envia"), ("shift+enter", "quebra a linha"), ("a", "aprova"), ("e", "edita"), ("d", "descarta")]),
+]
+
+
+class Teclas(Dialogo):
+    DEFAULT_CSS = css("Teclas", "Teclas #caixa { width: 86; } Teclas #corpo-teclas { height: auto; max-height: 40; overflow-y: auto; }")
+    BINDINGS = [Binding("escape,q,f1", "cancelar", priority=True)]
+
+    def __init__(self, nome: str, itens: list[tuple[str, str]], completa: bool = False) -> None:
+        super().__init__()
+        self.nome, self.itens, self.completa = nome, itens, completa
+
+    def compose(self) -> ComposeResult:
+        a = self.app
+        linhas = []
+        if self.itens and not self.completa:
+            linhas.append(Text(f"nesta janela ({self.nome})", style=f"bold {a.cor('accent')}"))
+            for k, d in self.itens:
+                linhas.append(Text.assemble((f"  {k:<24}", a.cor("accent")), (d, a.cor("texto"))))
+            linhas.append(Text(""))
+        linhas.append(Text("em qualquer janela", style=f"bold {a.cor('accent')}"))
+        for k, d in GLOBAIS:
+            linhas.append(Text.assemble((f"  {k:<24}", a.cor("accent")), (d, a.cor("texto"))))
+        if self.completa:
+            for tela, ts in POR_TELA:
+                linhas += [Text(""), Text(tela, style=f"bold {a.cor('accent')}")]
+                linhas.append(Text("  " + "  ·  ".join(f"{k} {d}" for k, d in ts), style=a.cor("texto")))
+            linhas += [Text(""), Text("mouse: clique escolhe e dá foco, roda rola, clique duplo abre, arrastar reordena a fila",
+                                      style=a.cor("mudo")),
+                       Text("dentro do herdr, ctrl+espaço é dele: use F1", style=a.cor("mudo"))]
+        with Vertical(id="caixa") as c:
+            c.border_title = "teclas" if not self.completa else "ajuda"
+            yield Static(D.juntar(linhas), id="corpo-teclas")
+            yield Static(pe(a, [("esc", "fecha")]), classes="pe")
+
+
+# ---------------------------------------------------------------- repositórios
+class Repos(Dialogo):
+    """Os repositórios que o serviço observa. Só metadados locais, por `git log`."""
+
+    DEFAULT_CSS = css("Repos", "Repos #caixa { width: 80; } Repos Lista { height: auto; max-height: 12; margin: 1 0; }")
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("delete,x", "remover"), Binding("n", "novo")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = "repositórios observados"
+            yield Static(Text("commit dentro de pomodoro vinculado vale 100%; solto vale 30%. Só o autor configurado em "
+                              "user.email conta.", style=self.app.cor("mudo")), classes="linha-texto")
+            yield Lista(self._linha, id="repos-lista", cursor_sem_foco=True)
+            with Horizontal(classes="campo"):
+                yield Static("pasta", classes="rot")
+                yield Input(id="r-caminho", placeholder="~/Work/compiladores")
+            with Horizontal(classes="campo"):
+                yield Static("matéria", classes="rot")
+                yield Input(id="r-materia", placeholder="vazio: vale para qualquer quest")
+            yield Static(pe(self.app, [("enter", "adiciona"), ("x", "remove o escolhido"), ("esc", "fecha")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self._recarregar()
+        self.query_one("#r-caminho", Input).focus()
+
+    def _recarregar(self) -> None:
+        self.query_one(Lista).definir(list(self.app.b.todos("SELECT * FROM repos ORDER BY id")))
+
+    def _linha(self, r, i, est) -> list[Text]:
+        import os
+        a = self.app
+        cam = r["caminho"].replace(os.path.expanduser("~"), "~")
+        return [D.linha_lr(Text.assemble((ic("git") + " ", a.cor("green")), (cam, a.cor("texto"))),
+                           Text(r["materia"] or "qualquer matéria", style=a.cor("mudo")), est.largura)]
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        cam = self.query_one("#r-caminho", Input).value.strip()
+        if not cam:
+            return
+        mat = self.query_one("#r-materia", Input).value.strip()
+
+        def depois(ok, r):
+            if ok:
+                self.query_one("#r-caminho", Input).value = ""
+                self.query_one("#r-materia", Input).value = ""
+                self.set_timer(0.2, self._recarregar)
+        self.app.pedir("repo_adicionar", {"caminho": cam, "materia": mat}, depois)
+
+    def action_remover(self) -> None:
+        if isinstance(self.focused, Input):
+            return
+        r = self.query_one(Lista).item_atual()
+        if r is not None:
+            self.app.pedir("repo_remover", {"id": r["id"]}, lambda ok, _: ok and self.set_timer(0.2, self._recarregar))
+
+    def action_novo(self) -> None:
+        self.query_one("#r-caminho", Input).focus()
+
+
+# ---------------------------------------------------------------- vitrine (as capturas mostram todos de uma vez)
+class Vitrine(Screen):
+    """A tela 10 do design: os diálogos lado a lado, os avisos, os estados da barra de HP e a legenda."""
+
+    DEFAULT_CSS = """
+    Vitrine { background: $background; layout: vertical; }
+    Vitrine .fila { height: 15; margin: 1 1 0 1; }
+    Vitrine .quadro { width: 1fr; height: 14; border: solid $rpg-linha; border-title-color: $accent; border-title-style: bold;
+                      padding: 0 1; margin: 0 1; }
+    Vitrine .baixo { height: 1fr; margin: 1 1 0 1; }
+    Vitrine .col { width: 1fr; margin: 0 1; }
+    """
+    BINDINGS = [Binding("escape", "fechar", priority=True)]
+
+    def compose(self) -> ComposeResult:
+        a = self.app
+        d_nivel = {"nivel": 8, "titulo": "Dev Pleno", "pontos": 1, "hp": 10, "bits": 25}
+        q = {"id": 14, "titulo": "Seção 2.1 do TCC", "est": 3, "dif": 3, "feitos": 3, "xp": 77}
+        quadros = [
+            [("nível alcançado", corpo_nivel(a, d_nivel) + [Text(""), pe(a, [("enter", "continuar")])], "accent"),
+             ("abandonar o pomodoro?", self._abandonar(), "yellow"),
+             ("você desmaiou", corpo_desmaio(a, {"bits": 128, "backup": True}) + [Text(""), pe(a, [("enter", "acordar")])], "red")],
+            [("concluir quest", self._concluir(q), "green"),
+             ("aprovar rascunho #14", self._aprovar(), "cyan"),
+             ("carta do dia (Jovem Místico)", corpo_carta(a, "a_estrela", "a_torre") + [Text(""), pe(a, [("espaço", "tira")])], "magenta")],
+        ]
+        for fila in quadros:
+            with Horizontal(classes="fila"):
+                for titulo, linhas, cor in fila:
+                    w = Static(D.juntar(linhas), classes="quadro")
+                    w.border_title = titulo
+                    w.styles.border_title_color = a.cor(cor)
+                    yield w
+        with Horizontal(classes="baixo"):
+            yield Static(D.juntar(self._avisos()), classes="col")
+            yield Static(D.juntar(self._barras()), classes="col")
+            yield Static(D.juntar(self._legenda()), classes="col")
+
+    def _abandonar(self) -> list[Text]:
+        a = self.app
+        return [Text(""), Text("Você fez 6 de 25 minutos.", style=a.cor("texto")), Text(""),
+                Text("abandonar custa 8 HP e zera o combo x1.3", style=a.cor("red")), Text(""),
+                Text("git stash guarda o pomodoro e mantém o combo", style=a.cor("green")),
+                Text("(6 mana, você tem 34)", style=a.cor("mudo")), Text(""), Text(""),
+                pe(a, [("s", "guardar"), ("x", "abandonar"), ("esc", "voltar")])]
+
+    def _concluir(self, q) -> list[Text]:
+        a = self.app
+        return [Text(""), Text(q["titulo"], style=f"bold {a.cor('forte')}"), Text("3 de 3 pomodoros · XP cheio", style=a.cor("green")),
+                Text(""), Text("o que você fez? (uma linha)", style=a.cor("mudo")),
+                Text(" escrevi a 2.1 com 4 modelos e a tabela", style=f"{a.cor('texto')} on {a.cor('campo')}"), Text(""),
+                Text.assemble((ic("commit") + " ", a.cor("blue")), ("2 commits em ~/Work/tcc detectados: +14 xp", a.cor("texto"))),
+                Text(""), pe(a, [("enter", "concluir"), ("esc", "volta")])]
+
+    def _aprovar(self) -> list[Text]:
+        a = self.app
+        linhas = [Text("")]
+        for k, v in (("título", "Seção 2.1 do TCC: modelos de GAN em IDS"), ("matéria", "TCC"), ("pomodoros", "3"),
+                     ("dificuldade", "◆◆◆"), ("prazo", "sex 20/11")):
+            linhas.append(Text.assemble((f"{k:<13}", a.cor("mudo")), (v, a.cor("texto"))))
+        linhas += [Text(""), Text("XP e Bits: 77 · 19 (tabela do jogo)", style=a.cor("yellow")),
+                   Text("o Mestre não escolhe esses valores", style=a.cor("mudo")), Text(""),
+                   pe(a, [("enter", "aprova"), ("tab", "campo"), ("esc", "volta")])]
+        return linhas
+
+    def _avisos(self) -> list[Text]:
+        a = self.app
+        avisos = [Text.assemble((ic("feito") + " ", a.cor("green")), ("+31 xp", f"bold {a.cor('green')}"), (" pomodoro 4 concluído", a.cor("texto"))),
+                  Text.assemble((ic("combo") + " ", a.cor("yellow")), ("combo ", a.cor("texto")), ("x1.4", f"bold {a.cor('yellow')}"),
+                                (" · mais 1 e vira x1.5", a.cor("mudo"))),
+                  Text.assemble((ic("commit") + " ", a.cor("blue")), ("commit a3f9c1e ", a.cor("texto")), ("+9 xp", f"bold {a.cor('green')}"),
+                                (" (CI verde)", a.cor("mudo"))),
+                  Text.assemble((ic("trofeu") + " ", a.cor("yellow")), ("conquista: ", a.cor("texto")),
+                                ("10 dias seguidos", f"bold {a.cor('yellow')}"))]
+        linhas = [Text("avisos (canto inferior direito)", style=a.cor("mudo"))]
+        for t in avisos:
+            linhas += D.caixa(a, [t], 52)
+        return linhas
+
+    def _barras(self) -> list[Text]:
+        a = self.app
+        linhas = [Text("estados da barra de HP", style=a.cor("mudo")), Text("")]
+        for nome, v, cor, nota in (("cheio", 100, "red", ""), ("normal", 72, "red", ""), ("baixo", 25, "orange", "<30%: laranja"),
+                                   ("crítico", 8, "red", "<10%: pisca"), ("virada", 18, "cyan", "Otaku: x2")):
+            t = Text(f"{nome:<9}", style=a.cor("texto"))
+            t.append_text(D.barra(a, v, 100, 24, cor))
+            t.append(f"   {nota}", style=a.cor("mudo"))
+            linhas += [t, Text("")]
+        return linhas
+
+    def _legenda(self) -> list[Text]:
+        a = self.app
+        pares = [(("feito", "green", "feito"), ("andamento", "yellow", "em andamento")),
+                 (("pendente", "texto", "pendente"), ("vencida", "red", "vencida")),
+                 (("xp", "green", "xp"), ("bits", "yellow", "bits")), (("vida", "red", "hp"), ("mana", "blue", "mana")),
+                 (("streak", "orange", "streak"), ("commit", "blue", "commit"))]
+        linhas = [Text("legenda", style=a.cor("mudo")), Text("")]
+        for (i1, c1, r1), (i2, c2, r2) in pares:
+            t = Text.assemble((ic(i1) + " ", a.cor(c1)), (f"{r1:<26}", a.cor("texto")), (ic(i2) + " ", a.cor(c2)), (r2, a.cor("texto")))
+            linhas += [t, Text("")]
+        linhas.append(Text.assemble(("◆ ", a.cor("blue")), ("ativa  ", a.cor("mudo")), ("◇ ", a.cor("mudo")), ("passiva  ", a.cor("mudo")),
+                                    ("● ", a.cor("mudo")), ("feito  ", a.cor("mudo")), ("◌ ", a.cor("mudo")), ("pendente", a.cor("mudo"))))
+        return linhas
+
+    def action_fechar(self) -> None:
+        self.dismiss(None)

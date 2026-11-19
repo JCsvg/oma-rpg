@@ -91,19 +91,23 @@ class Banco:
     def __init__(self, caminho: Path | str, leitura: bool = False) -> None:
         self.caminho = Path(caminho)
         self.leitura = leitura
+        self.memoria = False
         if leitura:
             if not self.caminho.exists():
                 # sem banco ainda (serviço nunca rodou): um banco vazio em memória, com o esquema, para as telas abrirem
                 self.c = sqlite3.connect(":memory:", check_same_thread=False)
                 self.c.executescript(ESQUEMA)
+                self.memoria = True
             else:
                 self.c = sqlite3.connect(f"file:{self.caminho}?mode=ro", uri=True, timeout=5, check_same_thread=False)
                 self.c.execute("PRAGMA query_only = ON")
+                self.c.execute("PRAGMA cache_size = -512")  # 512 KiB: a interface lê pouco de cada vez (memória)
         else:
             self.caminho.parent.mkdir(parents=True, exist_ok=True)
             self.c = sqlite3.connect(self.caminho, timeout=5, isolation_level=None, check_same_thread=False)
             self.c.execute("PRAGMA journal_mode = WAL")
             self.c.execute("PRAGMA synchronous = NORMAL")
+            self.c.execute("PRAGMA cache_size = -1024")
             self.c.executescript(ESQUEMA)
             if self.meta("versao") is None:
                 self.definir_meta("versao", str(VERSAO))
