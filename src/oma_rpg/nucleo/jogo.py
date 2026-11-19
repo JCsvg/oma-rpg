@@ -1205,6 +1205,77 @@ class Jogo:
         self.emitir({"evento": "repos"})
         return {"id": cur.lastrowid, "nome": r["nome"]}
 
+    # ------------------------------------------------------------ pastas que o Mestre pode ler
+    def pasta_adicionar(self, caminho=None, modo="sempre") -> dict:
+        """Só o jogador (pela interface). A pasta é resolvida e conferida (nunca ~, /, nem pasta sensível)."""
+        from oma_rpg.nucleo import pastas
+        if modo not in ("sempre", "uma_vez"):
+            raise ErroJogo("modo: sempre ou uma_vez")
+        real = pastas.validar_raiz(texto(caminho, "caminho", 500, obrigatorio=True))
+        agora = self.agora()
+        atual = self.b.um("SELECT modo FROM pastas WHERE caminho = ?", (real,))
+        if not (atual and atual["modo"] == "sempre" and modo == "uma_vez"):
+            expira = None if modo == "sempre" else agora + self._cfg("mestre", "pasta_uma_vez_min") * 60
+            self.b.x("INSERT INTO pastas (caminho, modo, criada, expira) VALUES (?,?,?,?) ON CONFLICT(caminho) DO UPDATE SET "
+                     "modo = excluded.modo, expira = excluded.expira", (real, modo, agora, expira))
+        for r in self.b.todos("SELECT id, caminho FROM pedidos_pasta WHERE estado = 'pendente'"):
+            if r["caminho"] == real or r["caminho"].startswith(real.rstrip("/") + "/"):
+                self.b.x("UPDATE pedidos_pasta SET estado = 'liberado' WHERE id = ?", (r["id"],))
+        self.emitir({"evento": "pastas"})
+        return {"caminho": real, "modo": modo}
+
+    def pasta_remover(self, caminho=None) -> dict:
+        c = texto(caminho, "caminho", 500, obrigatorio=True)
+        n = self.b.x("DELETE FROM pastas WHERE caminho = ?", (c,)).rowcount
+        if not n:
+            raise ErroJogo("essa pasta não está liberada")
+        self.emitir({"evento": "pastas"})
+        return {"caminho": c}
+
+    def pedir_pasta(self, caminho=None, motivo="") -> dict:
+        """O Mestre pede para ler uma pasta. Só registra o pedido: quem libera é o jogador, na taverna."""
+        from pathlib import Path
+
+        from oma_rpg.nucleo import consultas, pastas
+        alvo = pastas.pasta_pedida(texto(caminho, "caminho", 500, obrigatorio=True))
+        if not Path(alvo).is_dir():
+            raise ErroJogo("a pasta não existe")
+        m = pastas.motivo_sensivel(Path(alvo))
+        if m:
+            raise ErroJogo(m)
+        try:
+            pastas.resolver(alvo, consultas.caminhos_liberados(self.b, self.agora()))
+            return {"liberada": True, "caminho": alvo}
+        except ErroJogo:
+            pass
+        r = self.b.um("SELECT id FROM pedidos_pasta WHERE estado = 'pendente' AND caminho = ?", (alvo,))
+        if r:
+            return {"liberada": False, "id": r[0], "caminho": alvo}
+        if len(consultas.pedidos_pendentes(self.b)) >= self._cfg("mestre", "max_pedidos_pasta"):
+            raise ErroJogo("muitos pedidos de pasta esperando resposta")
+        cur = self.b.x("INSERT INTO pedidos_pasta (caminho, ts, motivo) VALUES (?,?,?)",
+                       (alvo, self.agora(), texto(motivo, "motivo", 200)))
+        self.emitir({"evento": "pedido_pasta", "id": cur.lastrowid, "caminho": alvo, "motivo": texto(motivo, "motivo", 200)})
+        return {"liberada": False, "id": cur.lastrowid, "caminho": alvo}
+
+    def responder_pedido(self, id=None, resposta=None) -> dict:
+        pid = inteiro(id, "id", 1, 10**9)
+        if resposta not in ("sempre", "uma_vez", "negar"):
+            raise ErroJogo("resposta: sempre, uma_vez ou negar")
+        r = self.b.um("SELECT * FROM pedidos_pasta WHERE id = ?", (pid,))
+        if r is None or r["estado"] != "pendente":
+            raise ErroJogo("pedido não encontrado ou já respondido")
+        if resposta == "negar":
+            self.b.x("UPDATE pedidos_pasta SET estado = 'negado' WHERE id = ?", (pid,))
+            self.emitir({"evento": "pastas"})
+            return {"id": pid, "resposta": "negar"}
+        try:
+            self.pasta_adicionar(r["caminho"], resposta)
+        except ErroJogo:
+            self.b.x("UPDATE pedidos_pasta SET estado = 'negado' WHERE id = ?", (pid,))
+            raise
+        return {"id": pid, "resposta": resposta, "caminho": r["caminho"]}
+
     def repo_remover(self, id=None) -> dict:
         rid = inteiro(id, "id", 1, 10**9)
         self.b.x("DELETE FROM repos WHERE id = ?", (rid,))

@@ -82,3 +82,6 @@ caixa_chance_cosmetico = 40   # em %
 
 [mestre]
 max_rascunhos_por_dia = 20    # o CLI recusa o 21º rascunho do dia
+pasta_uma_vez_min = 60        # "liberar uma vez" vale por 60 minutos
+max_pedidos_pasta = 5         # pedidos de pasta pendentes ao mesmo tempo
+espera_pedido_s = 90          # quanto o oma-rpg ls/ver espera o JC responder na taverna

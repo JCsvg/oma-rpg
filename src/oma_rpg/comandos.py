@@ -1,7 +1,8 @@
 """Os comandos do jogo e quem pode chamar cada um.
 
 Dois papéis:
-- mestre: o Claude Code pela skill e o CLI `oma-rpg`. Lê status, quests e histórico, cria e edita rascunhos. Só isso.
+- mestre: o Claude Code pela skill e o CLI `oma-rpg`. Lê status, quests, histórico e as pastas liberadas, cria e edita
+  rascunhos e pede para ler uma pasta (o pedido não libera nada: quem libera é o jogador). Só isso.
 - jogador: a interface. Tudo o que o mestre faz e mais aprovar, concluir, pomodoro, skills, loja e o resto.
 
 Nenhum comando, de nenhum papel, recebe um valor de XP, Bits, HP, MP, nível ou pontos: o XP nasce dentro do motor,
@@ -48,6 +49,9 @@ COMANDOS: dict[str, tuple] = {
     "historico": (_historico, {"dias"}, False),
     "rascunho": (lambda j, a: j.rascunho(**a), CAMPOS_QUEST, False),
     "editar_rascunho": (lambda j, a: j.editar_rascunho(**a), CAMPOS_QUEST | {"id"}, False),
+    "pastas": (lambda j, a: {"pastas": C.pastas(j.b, j.agora())}, set(), False),
+    # pedir não libera: só registra o pedido, e a interface pergunta ao jogador
+    "pedir_pasta": (lambda j, a: j.pedir_pasta(a.get("caminho"), a.get("motivo", "")), {"caminho", "motivo"}, False),
     # daqui para baixo, só a interface (papel jogador)
     "criar_heroi": (lambda j, a: j.criar_heroi(a.get("nome"), a.get("classe")), {"nome", "classe"}, True),
     "trocar_classe": (lambda j, a: j.trocar_classe(a.get("classe")), {"classe"}, True),
@@ -84,6 +88,9 @@ COMANDOS: dict[str, tuple] = {
                 {"papel", "texto", "extra"}, True),
     "repo_adicionar": (lambda j, a: j.repo_adicionar(a.get("caminho"), a.get("materia", "")), {"caminho", "materia"}, True),
     "repo_remover": (lambda j, a: j.repo_remover(a.get("id")), {"id"}, True),
+    "pasta_adicionar": (lambda j, a: j.pasta_adicionar(a.get("caminho"), a.get("modo", "sempre")), {"caminho", "modo"}, True),
+    "pasta_remover": (lambda j, a: j.pasta_remover(a.get("caminho")), {"caminho"}, True),
+    "responder_pedido": (lambda j, a: j.responder_pedido(a.get("id"), a.get("resposta")), {"id", "resposta"}, True),
 }
 
 DO_MESTRE = frozenset(k for k, (_, _, so_jogador) in COMANDOS.items() if not so_jogador)

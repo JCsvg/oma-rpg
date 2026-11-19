@@ -417,3 +417,18 @@ def progresso_conquista(b, h, c: dict, dia: str) -> int:
     if t == "arcos":
         return int(b.escalar("SELECT COUNT(*) FROM arcos WHERE bonus_em IS NOT NULL", (), 0))
     return 0
+
+
+# ------------------------------------------------------------ pastas liberadas para o Mestre
+def pastas(b, agora: float) -> list[dict]:
+    """As pastas liberadas agora (as de "uma vez" valem até expirar)."""
+    return [{"caminho": r["caminho"], "modo": r["modo"], "expira": r["expira"]} for r in
+            b.todos("SELECT * FROM pastas WHERE expira IS NULL OR expira > ? ORDER BY caminho", (agora,))]
+
+
+def caminhos_liberados(b, agora: float) -> list[str]:
+    return [p["caminho"] for p in pastas(b, agora)]
+
+
+def pedidos_pendentes(b) -> list:
+    return b.todos("SELECT * FROM pedidos_pasta WHERE estado = 'pendente' ORDER BY id")

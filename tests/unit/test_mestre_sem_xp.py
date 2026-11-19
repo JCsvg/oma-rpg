@@ -25,6 +25,7 @@ def foto(j):
 
 ARGS_MESTRE = {
     "ping": [{}],
+    "pastas": [{}],
     "status": [{}],
     "quests": [{}, {"arco": "TCC"}],
     "historico": [{"dias": 30}],
@@ -35,7 +36,8 @@ ARGS_MESTRE = {
 
 
 def test_papel_mestre_so_le_e_cria_rascunho():
-    assert DO_MESTRE == {"ping", "status", "quests", "historico", "rascunho", "editar_rascunho"}
+    # pedir_pasta só registra o pedido; quem libera é o jogador (test_pastas)
+    assert DO_MESTRE == {"ping", "status", "quests", "historico", "rascunho", "editar_rascunho", "pastas", "pedir_pasta"}
 
 
 @pytest.mark.parametrize("cmd", sorted(set(COMANDOS) - DO_MESTRE))
