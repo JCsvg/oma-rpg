@@ -407,12 +407,16 @@ class EditarQuest(Dialogo):
     """Nova quest, editar quest ou aprovar rascunho (os mesmos campos). A recompensa aparece calculada, sem campo."""
 
     DEFAULT_CSS = css("EditarQuest", """
-    EditarQuest #caixa { width: 70; }
+    EditarQuest #caixa { width: 88; }
     EditarQuest .campo { height: 1; }
+    EditarQuest #campo-desc { height: 6; margin-top: 1; }
+    EditarQuest #c-porque { height: 5; border: solid $rpg-linha; padding: 0 1; }
+    EditarQuest #c-porque:focus { border: solid $accent; }
+    EditarQuest #passos { height: auto; max-height: 6; margin-top: 1; }
     EditarQuest #conta { height: 3; margin-top: 1; }
     """)
     CAMPOS = [("titulo", "título"), ("materia", "matéria"), ("est", "pomodoros"), ("dif", "dificuldade"), ("prio", "prioridade"),
-              ("arco", "arco"), ("prazo", "prazo"), ("porque", "como resolver")]
+              ("arco", "arco"), ("prazo", "prazo")]
 
     def __init__(self, q: dict | None, aprovar: bool = False) -> None:
         super().__init__()
@@ -420,6 +424,7 @@ class EditarQuest(Dialogo):
         self.aprovar = aprovar
 
     def compose(self) -> ComposeResult:
+        from textual.widgets import TextArea
         a = self.app
         q = self.q or {}
         if self.aprovar:
@@ -441,25 +446,53 @@ class EditarQuest(Dialogo):
                     yield Static(rot, classes="rot")
                     yield Input(str(v or ""), id=f"c-{k}", placeholder={"prazo": "AAAA-MM-DD", "dif": "1 fácil, 2 média, 3 difícil",
                                                                         "prio": "1 baixa, 2 média, 3 alta",
-                                                                        "porque": "passo a passo para resolver",
                                                                         "arco": "grupo, ex. Prova de Compiladores"}.get(k, ""))
             if not q:
                 with Horizontal(classes="campo"):
                     yield Static("tipo", classes="rot")
                     yield Input("normal", id="c-tipo", placeholder="normal ou daily")
+            with Horizontal(id="campo-desc"):
+                yield Static("como fazer", classes="rot")
+                yield TextArea(str(q.get("porque") or ""), id="c-porque", soft_wrap=True, show_line_numbers=False, compact=True)
+            yield Pintado(self._passos, id="passos")
             yield Pintado(self._conta, id="conta")
+            with Horizontal(id="botoes"):
+                yield Botao("aprovar" if self.aprovar else "salvar", id="salvar", classes="cheio")
+                yield Botao("esc  voltar", id="voltar")
             yield Static(pe(a, [("enter", "aprova" if self.aprovar else "salva"), ("tab", "campo"), ("esc", "volta")]), classes="pe")
 
     def on_mount(self) -> None:
         self.query_one("#c-titulo", Input).focus()
 
     def _valores(self) -> dict:
+        from textual.widgets import TextArea
         d = {}
         for k, _ in self.CAMPOS:
             d[k] = self.query_one(f"#c-{k}", Input).value.strip()
+        d["porque"] = self.query_one("#c-porque", TextArea).text.strip()
         if not self.q:
             d["tipo"] = self.query_one("#c-tipo", Input).value.strip() or "normal"
         return d
+
+    def _passos(self, w: int) -> Text:
+        from oma_rpg.nucleo.jogo import Jogo
+        a = self.app
+        desc = self.query_one("#c-porque").text if self.is_mounted and self.query("#c-porque") else str((self.q or {}).get("porque") or "")
+        subs = Jogo._passos_de(desc)
+        if not subs and self.q and self.q.get("subtarefas"):
+            subs = self.q["subtarefas"]
+        if not subs:
+            return Text("")
+        linhas = [Text("passos (checklist visual, opcional)", style=f"bold {a.cor('forte')}")]
+        for s in subs[:5]:
+            t = Text()
+            t.append((ic("feito") if s.get("feita") else ic("pendente")) + " ", style=a.cor("green") if s.get("feita") else a.cor("cyan"))
+            t.append(s["texto"], style=a.cor("mudo") if s.get("feita") else a.cor("texto"))
+            t.truncate(max(20, w), overflow="ellipsis")
+            linhas.append(t)
+        if len(subs) > 5:
+            linhas.append(Text(f"  e mais {len(subs) - 5} passos", style=a.cor("mudo")))
+        return D.juntar(linhas)
 
     def _conta(self, w: int) -> Text:
         a = self.app
@@ -481,8 +514,21 @@ class EditarQuest(Dialogo):
         if ev.input.id in ("c-est", "c-dif"):
             self.query_one("#conta", Pintado).pintar()
 
+    def on_text_area_changed(self, ev) -> None:
+        if ev.text_area.id == "c-porque":
+            self.query_one("#passos", Pintado).pintar()
+
     def on_input_submitted(self, ev: Input.Submitted) -> None:
         ev.stop()
+        self._salvar()
+
+    def apertou(self, bid: str) -> None:
+        if bid == "salvar":
+            self._salvar()
+        else:
+            self.action_cancelar()
+
+    def _salvar(self) -> None:
         d = self._valores()
         a = self.app
         if self.q:

@@ -761,20 +761,37 @@ class Jogo:
         self.emitir({"evento": "quest", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
+    @staticmethod
+    def _passos_de(desc: str) -> list[dict]:
+        import re
+        txt = (desc or "").strip()
+        if not txt:
+            return []
+        partes = re.split(r"(?:\n+|(?=(?:^|\s)\d+\)\s+)|(?=(?:^|\n)\s*\d+\.\s+))", txt)
+        passos = []
+        for p in partes:
+            limpo = re.sub(r"^\s*(?:\d+[.)]\s*|[-*]\s*)", "", p).strip()
+            if limpo:
+                passos.append({"texto": limpo[:80], "feita": False})
+        if len(passos) <= 1 and "\n" not in txt:
+            return []
+        return passos[:12]
+
     def rascunho(self, **a) -> dict:
         """O Mestre propõe. A recompensa sai da fórmula; nada vale até o jogador aprovar."""
         self._h()
         f = self._campos_quest(a, parcial=False)
         f["tipo"] = "normal"
+        subs = json.dumps(self._passos_de(f["porque"]), ensure_ascii=False)
         maximo = self._cfg("mestre", "max_rascunhos_por_dia")
         if maximo > 0:
             ini = C.inicio_do_dia(self.hoje())
             if int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE origem = 'mestre' AND criada >= ?", (ini,), 0)) >= maximo:
                 raise ErroJogo(f"limite de {maximo} rascunhos por dia")
         cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, arco_nome, prazo, tipo, estado, "
-                       "origem, porque, ordem, criada) VALUES (?,?,?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?)",
+                       "origem, porque, subtarefas, ordem, criada) VALUES (?,?,?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?,?)",
                        (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], f["arco_nome"],
-                        f["prazo"], f["porque"], self._proxima_ordem(), self.agora()))
+                        f["prazo"], f["porque"], subs, self._proxima_ordem(), self.agora()))
         self.emitir({"evento": "rascunho", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
@@ -786,6 +803,8 @@ class Jogo:
         a.pop("tipo", None)
         a.pop("subtarefas", None)
         f = self._campos_quest(a, parcial=True)
+        if "porque" in f:
+            f["subtarefas"] = json.dumps(self._passos_de(f["porque"]), ensure_ascii=False)
         if f:
             sets = ", ".join(f"{k} = ?" for k in f)
             self.b.x(f"UPDATE quests SET {sets} WHERE id = ?", (*f.values(), qid))
@@ -845,6 +864,13 @@ class Jogo:
         self.b.x("UPDATE quests SET estado = 'descartada' WHERE id = ?", (qid,))
         self.emitir({"evento": "quest", "id": qid})
         return {"id": qid}
+
+    def descartar_todos_rascunhos(self) -> dict:
+        ids = [r[0] for r in self.b.todos("SELECT id FROM quests WHERE estado = 'rascunho'")]
+        if ids:
+            self.b.x("UPDATE quests SET estado = 'descartada' WHERE estado = 'rascunho'")
+            self.emitir({"evento": "quest", "qtd": len(ids)})
+        return {"descartados": len(ids)}
 
     def descartar_quest(self, id=None) -> dict:
         qid = inteiro(id, "id", 1, 10**9)
@@ -1218,6 +1244,11 @@ class Jogo:
         self.b.x("DELETE FROM taverna WHERE id <= (SELECT MAX(id) - 500 FROM taverna)")
         self.emitir({"evento": "taverna"})
         return {}
+
+    def limpar_taverna(self) -> dict:
+        self.b.x("DELETE FROM taverna")
+        self.emitir({"evento": "taverna"})
+        return {"limpo": True}
 
     def repo_adicionar(self, caminho=None, materia="") -> dict:
         from oma_rpg.nucleo import git

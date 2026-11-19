@@ -7,12 +7,80 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 
+from rich.console import Console
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static, TextArea
+
+_CON = Console()
+_MD_TOKEN = re.compile(r"(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*)")
+
+
+def _md_inline(a, s: str, base_cor: str) -> Text:
+    """Converte **negrito**, *itálico* e `código` para as cores do tema."""
+    t = Text()
+    pos = 0
+    for m in _MD_TOKEN.finditer(s):
+        if m.start() > pos:
+            t.append(s[pos:m.start()], style=a.cor(base_cor))
+        tok = m.group(0)
+        if tok.startswith("`"):
+            t.append(tok[1:-1], style=f"{a.cor('yellow')} on {a.cor('painel')}")
+        elif tok.startswith("**"):
+            t.append(tok[2:-2], style=f"bold {a.cor('accent')}")
+        else:
+            t.append(tok[1:-1], style=f"italic {a.cor('forte')}")
+        pos = m.end()
+    if pos < len(s):
+        t.append(s[pos:], style=a.cor(base_cor))
+    return t
+
+
+def _md_linhas(a, texto: str, w: int, base_cor: str) -> list[Text]:
+    """Formata cabeçalhos (###), listas (- ) e markdown inline respeitando a largura w."""
+    larg = max(12, w)
+    linhas: list[Text] = []
+    for bruto in (texto or "").splitlines():
+        s = bruto.rstrip()
+        if not s:
+            linhas.append(Text(""))
+            continue
+        if s.lstrip().startswith("#"):
+            cab = s.lstrip("# ").strip()
+            t = Text(cab, style=f"bold {a.cor('accent')}")
+            linhas.extend(t.wrap(_CON, larg) or [Text("")])
+            continue
+        if re.match(r"^\s*[-*]\s+", s):
+            item = re.sub(r"^\s*[-*]\s+", "", s)
+            t = Text("• ", style=a.cor("accent"))
+            t.append_text(_md_inline(a, item, base_cor))
+            linhas.extend(t.wrap(_CON, larg) or [Text("")])
+            continue
+        t = _md_inline(a, s, base_cor)
+        linhas.extend(t.wrap(_CON, larg) or [Text("")])
+    return linhas or [Text("")]
+
+
+def _copiar_texto(app, texto: str) -> None:
+    if not texto:
+        return
+    try:
+        app.copy_to_clipboard(texto)
+    except Exception:
+        pass
+    wl = shutil.which("wl-copy")
+    if wl:
+        try:
+            subprocess.run([wl], input=texto, text=True, timeout=2, check=False)
+        except Exception:
+            pass
+    app.avisar("mensagem copiada")
 
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.ui import desenho as D
@@ -26,14 +94,45 @@ from oma_rpg.ui.widgets import Botao, Pintado
 class Mensagem(TextArea):
     BINDINGS = [Binding("enter", "enviar", priority=True), Binding("shift+enter,alt+enter", "quebrar", priority=True)]
 
+    def on_mount(self) -> None:
+        self._idx = -1
+        self._rascunho = ""
+
     def action_enviar(self) -> None:
         t = self.text.strip()
         if t:
+            self._idx = -1
+            self._rascunho = ""
             pagina_de(self).enviar(t)
             self.load_text("")
 
     def action_quebrar(self) -> None:
         self.insert("\n")
+
+    def on_key(self, ev: events.Key) -> None:
+        if ev.key == "up" and self.cursor_location[0] == 0:
+            msgs = [r["texto"] for r in self.app.b.todos("SELECT texto FROM taverna WHERE papel = 'voce' ORDER BY id")]
+            if not msgs:
+                return
+            ev.stop()
+            ev.prevent_default()
+            if self._idx == -1:
+                self._rascunho = self.text
+                self._idx = len(msgs) - 1
+            elif self._idx > 0:
+                self._idx -= 1
+            self.load_text(msgs[self._idx])
+            self.cursor_location = (0, len(msgs[self._idx]))
+        elif ev.key == "down" and self._idx != -1 and self.cursor_location[0] >= self.document.line_count - 1:
+            msgs = [r["texto"] for r in self.app.b.todos("SELECT texto FROM taverna WHERE papel = 'voce' ORDER BY id")]
+            ev.stop()
+            ev.prevent_default()
+            if self._idx < len(msgs) - 1:
+                self._idx += 1
+                self.load_text(msgs[self._idx])
+            else:
+                self._idx = -1
+                self.load_text(self._rascunho)
 
 
 class JanelaConversa(Janela):
@@ -51,12 +150,13 @@ class JanelaConversa(Janela):
 
     def compose(self) -> ComposeResult:
         yield Pintado(self._topo, id="conv-topo")
-        yield Lista(self._linha, alturas=self._altura, id="conv-lista", selecionavel=lambda it: False)
+        yield Lista(self._linha, alturas=self._altura, id="conv-lista", selecionavel=lambda it: it[0] in ("msg", "cli"),
+                    cursor_sem_foco=True)
         with Vertical(id="caixa-msg") as c:
             c.border_title = "mensagem"
             c.border_subtitle = "enter envia"
             yield Mensagem(id="msg", soft_wrap=True, show_line_numbers=False, compact=True, placeholder="escreva aqui…")
-            yield Static("shift+enter quebra a linha  ·  /revisão  /rascunhos  /meta", id="dica-msg")
+            yield Static("shift+enter quebra  ·  ↑ anterior  ·  /revisão  /rascunhos  /meta  /novo  /limpar", id="dica-msg")
 
     def on_mount(self) -> None:
         self._cache: dict = {}
@@ -126,14 +226,32 @@ class JanelaConversa(Janela):
                 l.stylize(f"on {a.cor('painel')}")
             return linhas
         papel = v["papel"]
-        rot = {"voce": ("você", "forte"), "mestre": ("mestre", "cyan"), "sistema": ("aviso", "yellow")}.get(papel, (papel, "mudo"))
-        corpo = D.quebrar(v["texto"], max(10, w - 8), a.cor("texto") if papel != "sistema" else a.cor("mudo"))
+        if papel == "voce":
+            nome = (C.heroi(a.b) or {}).get("nome") or "você"
+            larg = max(12, w - 4)
+            corpo = _md_linhas(a, v["texto"], larg, "forte")
+            linhas = [Text("")]
+            cab = Text(nome, style=f"bold {a.cor('accent')}")
+            linhas.append(D.linha_lr(Text(""), cab, w))
+            for l in corpo:
+                linhas.append(D.linha_lr(Text(""), l, w))
+            return linhas
+        rot = {"mestre": ("mestre", "cyan"), "sistema": ("aviso", "yellow")}.get(papel, (papel, "mudo"))
+        corpo = _md_linhas(a, v["texto"], max(12, w - 8), "texto" if papel != "sistema" else "mudo")
         linhas = [Text("")]
         for n, l in enumerate(corpo):
             t = Text(f"{rot[0]:<7}" if n == 0 else " " * 7, style=f"bold {a.cor(rot[1])}")
             t.append_text(l)
             linhas.append(t)
         return linhas
+
+    def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
+        ev.stop()
+        it = ev.item
+        if it and it[0] == "msg":
+            _copiar_texto(self.app, it[1]["texto"])
+        elif it and it[0] == "cli":
+            _copiar_texto(self.app, "\n".join(r["texto"] for r in it[1]))
 
     def _altura(self, it) -> int:
         w = max(20, self.query_one(Lista).size.width or 80)
@@ -156,7 +274,8 @@ class JanelaConversa(Janela):
 
     def teclas(self):
         return [("enter", "envia para o Mestre"), ("shift+enter ou alt+enter", "quebra a linha"),
-                ("/revisão /rascunhos /meta", "atalhos de pedido"), ("ctrl+→", "rascunhos")]
+                ("↑ ↓", "mensagens anteriores"), ("ctrl+y", "copia última resposta"),
+                ("/revisão /rascunhos /meta /novo /limpar", "atalhos"), ("ctrl+→", "rascunhos")]
 
 
 class JanelaRascunhosT(Janela):
@@ -211,7 +330,7 @@ class JanelaRascunhosT(Janela):
     def _pe(self, w: int) -> Text:
         a = self.app
         return D.juntar([Text.assemble(("shift+a", a.cor("accent")), (" aprova todos  ·  ", a.cor("mudo")),
-                                       ("nada vale XP até aprovar", a.cor("mudo")))])
+                                       ("shift+d", a.cor("red")), (" recusa todos", a.cor("mudo")))])
 
     def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
         ev.stop()
@@ -224,7 +343,8 @@ class JanelaRascunhosT(Janela):
         return [("a", "aprovar", "noop"), ("e", "editar", "noop"), ("d", "descartar", "noop")]
 
     def teclas(self):
-        return [("a", "aprova o rascunho"), ("e ou enter", "edita e aprova"), ("d", "descarta"), ("shift+a", "aprova todos")]
+        return [("a", "aprova o rascunho"), ("e ou enter", "edita e aprova"), ("d", "descarta"),
+                ("shift+a", "aprova todos"), ("shift+d", "recusa todos")]
 
 
 class JanelaQuestsT(Janela):
@@ -290,9 +410,10 @@ class PaginaTaverna(Pagina):
         "quests-t": {"esq": "conversa", "cima": "rascunhos-t"},
     }
     BINDINGS = [Binding("a", "aprovar", show=False), Binding("e", "editar", show=False), Binding("d", "descartar", show=False),
-                Binding("A,shift+a", "aprovar_todos", show=False), Binding("P,shift+p", "pastas", show=False),
-                Binding("M,shift+m", "agente", show=False), Binding("f", "focar_quest", show=False),
-                Binding("space", "concluir_quest", show=False)]
+                Binding("A,shift+a", "aprovar_todos", show=False), Binding("D,shift+d", "descartar_todos", show=False),
+                Binding("P,shift+p", "pastas", show=False), Binding("M,shift+m", "agente", show=False),
+                Binding("f", "focar_quest", show=False), Binding("space", "concluir_quest", show=False),
+                Binding("ctrl+y", "copiar", show=False)]
     DEFAULT_CSS = "PaginaTaverna JanelaConversa { width: 1fr; } PaginaTaverna #t-dir { width: 52; }"
 
     def compose(self) -> ComposeResult:
@@ -319,6 +440,17 @@ class PaginaTaverna(Pagina):
             self._giro.resume()
 
     def enviar(self, texto: str) -> None:
+        cmd = texto.strip().lower()
+        if cmd in ("/novo", "/reiniciar"):
+            if self.app.mestre is not None:
+                self.app.mestre.parar()
+                self.app.mestre.sessao = None
+            self.app.estado.definir("taverna_sessao", None)
+            self.app.pedir("taverna", {"papel": "sistema", "texto": "Nova conversa iniciada (sessão do Mestre reiniciada)."})
+            return
+        if cmd == "/limpar":
+            self.app.pedir("limpar_taverna", {}, lambda ok, _: ok and self.app.avisar("conversa apagada"))
+            return
         m = self.app.mestre
         if m is None or self.app.mestre_estado() == "ausente":
             self.app.avisar_erro("Agente não encontrado: pressione M na taverna para escolher outro.")
@@ -374,6 +506,20 @@ class PaginaTaverna(Pagina):
     def action_aprovar_todos(self) -> None:
         if self.app.nome_janela(self.app.focused) != "conversa":
             self.app.pedir("aprovar_todos")
+
+    def action_descartar_todos(self) -> None:
+        if self.app.nome_janela(self.app.focused) != "conversa":
+            self.app.pedir("descartar_todos_rascunhos")
+
+    def action_copiar(self) -> None:
+        conv = self.query_one(JanelaConversa)
+        it = conv.query_one("#conv-lista").item_atual() if self.app.nome_janela(self.app.focused) == "conversa" else None
+        if it and it[0] == "msg":
+            _copiar_texto(self.app, it[1]["texto"])
+            return
+        ult = self.app.b.um("SELECT texto FROM taverna WHERE papel = 'mestre' ORDER BY id DESC LIMIT 1")
+        if ult:
+            _copiar_texto(self.app, ult["texto"])
 
     def action_editar(self) -> None:
         from oma_rpg.ui.dialogos import EditarQuest

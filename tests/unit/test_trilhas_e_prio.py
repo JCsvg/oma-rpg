@@ -46,3 +46,33 @@ def test_trilha_com_ramos_exige_multiplos_prerequisitos(heroi):
     qs = {q["id"]: q for q in C.quests(jogo.b, jogo.cfg, jogo.hoje(), "aberta")}
     assert qs[chefe["id"]]["bloqueada"] is False
     jogo.iniciar(chefe["id"])
+
+
+def test_rascunho_gera_checklist_visual_sem_bloquear(heroi):
+    r = heroi.rascunho(titulo="MT: Estrutura", est=1, dif=1,
+                       descricao="1) Ler paginas 2 a 10. 2) Fazer exercicio 1. 3) Conferir gabarito.")
+    heroi.aprovar(r["id"])
+    q = next(x for x in C.quests(heroi.b, heroi.cfg, heroi.hoje(), "aberta") if x["id"] == r["id"])
+    assert [s["texto"] for s in q["subtarefas"]] == [
+        "Ler paginas 2 a 10.",
+        "Fazer exercicio 1.",
+        "Conferir gabarito.",
+    ]
+    assert all(not s["feita"] for s in q["subtarefas"])
+    heroi.concluir_quest(r["id"])
+
+
+def test_descartar_todos_rascunhos_e_limpar_taverna(heroi):
+    heroi.rascunho(titulo="R1", est=1, dif=1)
+    heroi.rascunho(titulo="R2", est=1, dif=1)
+    assert len(C.quests(heroi.b, heroi.cfg, heroi.hoje(), "rascunho")) == 2
+    res = heroi.descartar_todos_rascunhos()
+    assert res == {"descartados": 2}
+    assert C.quests(heroi.b, heroi.cfg, heroi.hoje(), "rascunho") == []
+
+    heroi.taverna_registrar("voce", "oi")
+    heroi.taverna_registrar("mestre", "olá")
+    assert len(heroi.b.todos("SELECT * FROM taverna")) == 2
+    heroi.limpar_taverna()
+    assert heroi.b.todos("SELECT * FROM taverna") == []
+
