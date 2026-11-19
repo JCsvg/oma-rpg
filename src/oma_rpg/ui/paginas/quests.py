@@ -7,9 +7,11 @@ from __future__ import annotations
 from datetime import timedelta
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widget import Widget
 
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.nucleo import regras
@@ -130,6 +132,167 @@ def _montar_arvore(qs: list[dict]) -> list[dict]:
     return saida
 
 
+def _niveis_arvore(qs: list[dict]) -> list[list[dict]]:
+    """Agrupa quests do arco por nível topológico (0 = raízes, 1+ = dependentes)."""
+    por_id = {q["id"]: q for q in qs}
+    memo: dict[int, int] = {}
+
+    def niv(qid: int, pilha: set[int]) -> int:
+        if qid in memo:
+            return memo[qid]
+        if qid in pilha:
+            return 0
+        q = por_id.get(qid)
+        if not q:
+            return 0
+        deps = [d for d in q.get("depende_de") or [] if d in por_id]
+        n = 1 + max(niv(d, pilha | {qid}) for d in deps) if deps else 0
+        memo[qid] = n
+        return n
+
+    grupos: dict[int, list[dict]] = {}
+    for q in qs:
+        grupos.setdefault(niv(q["id"], set()), []).append(q)
+    linhas: list[list[dict]] = []
+    for k in sorted(grupos):
+        bloco = grupos[k]
+        for i in range(0, len(bloco), 3):
+            linhas.append(bloco[i : i + 3])
+    return linhas
+
+
+class ArvoreQuests(Widget, can_focus=True):
+    DEFAULT_CSS = "ArvoreQuests { height: auto; width: 1fr; }"
+    BINDINGS = [Binding("up,k", "mover(0, -1)", show=False), Binding("down,j", "mover(0, 1)", show=False),
+                Binding("left,h", "mover(-1, 0)", show=False), Binding("right,l", "mover(1, 0)", show=False),
+                Binding("enter", "escolher", show=False)]
+
+    def __init__(self, **kw) -> None:
+        super().__init__(**kw)
+        self._grade: list[list[dict]] = []
+        self._caixas: list[tuple[int, int, int, int, dict]] = []
+        self.qid: int | None = None
+
+    def definir(self, qs: list[dict]) -> dict | None:
+        self._grade = _niveis_arvore(qs)
+        todos = [q for linha in self._grade for q in linha]
+        if not todos:
+            self.qid = None
+        elif self.qid is None or not any(q["id"] == self.qid for q in todos):
+            self.qid = todos[0]["id"]
+        self.refresh(layout=True)
+        return self.atual()
+
+    def atual(self) -> dict | None:
+        for linha in self._grade:
+            for q in linha:
+                if q["id"] == self.qid:
+                    return q
+        return self._grade[0][0] if self._grade else None
+
+    def _pos(self) -> tuple[int, int]:
+        for r, linha in enumerate(self._grade):
+            for c, q in enumerate(linha):
+                if q["id"] == self.qid:
+                    return r, c
+        return 0, 0
+
+    def action_mover(self, dx: int, dy: int) -> None:
+        if not self._grade:
+            return
+        r, c = self._pos()
+        nr = max(0, min(len(self._grade) - 1, r + dy))
+        nc = max(0, min(len(self._grade[nr]) - 1, c + dx))
+        self.qid = self._grade[nr][nc]["id"]
+        self.refresh()
+        pg = self.ancestors_with_self
+        for anc in pg:
+            if hasattr(anc, "mostrar"):
+                anc.mostrar(self.atual())
+                break
+
+    def action_escolher(self) -> None:
+        q = self.atual()
+        if q:
+            for anc in self.ancestors_with_self:
+                if hasattr(anc, "action_editar"):
+                    anc.action_editar()
+                    break
+
+    def on_mouse_down(self, ev: events.MouseDown) -> None:
+        self.focus()
+        for x0, y0, x1, y1, q in self._caixas:
+            if x0 <= ev.x < x1 and y0 <= ev.y < y1:
+                self.qid = q["id"]
+                self.refresh()
+                for anc in self.ancestors_with_self:
+                    if hasattr(anc, "mostrar"):
+                        anc.mostrar(q)
+                        break
+                break
+
+    def get_content_height(self, container, viewport, width: int) -> int:
+        if not self._grade:
+            return 3
+        return max(3, len(self._grade) * 6)
+
+    def render(self) -> Text:
+        a = self.app
+        w = max(40, self.size.width)
+        self._caixas = []
+        if not self._grade:
+            return Text("\n  nenhuma quest neste arco", style=a.cor("mudo"))
+        linhas: list[Text] = []
+        for idx_l, grupo in enumerate(self._grade):
+            cols = max(1, len(grupo))
+            cw = max(16, (w - 2) // cols)
+            bw = min(28, cw - 2)
+            y0 = len(linhas)
+            caixas = []
+            for idx_c, q in enumerate(grupo):
+                feita = q["estado"] == "feita" or q["daily_feita"]
+                bloq = bool(q.get("bloqueada")) and not feita
+                cursor = q["id"] == self.qid
+                borda = a.cor("accent") if cursor and self.has_focus else a.cor("forte") if cursor else \
+                    a.cor("linha") if bloq else (a.cor("green") if feita else a.cor("texto"))
+                fundo = f" on {a.cor('selecao')}" if cursor else ""
+                marca, cor = ("✓", "green") if feita else ("🔒", "yellow") if bloq else \
+                    (("!", "red") if q.get("prio", 2) == 3 else ("●", "cyan"))
+                l1 = Text()
+                l1.append(f"{marca} ", style=a.cor(cor) + fundo)
+                l1.append(q["titulo"], style=(a.cor("mudo") if (feita or bloq) else f"bold {a.cor('forte')}") + fundo)
+                l2 = D.linha_lr(Text(f"#{q['id']} · {q['feitos']}/{q['est']}p", style=a.cor("mudo") + fundo),
+                                Text(f"+{q['xp']}xp", style=a.cor("yellow") + fundo), bw - 4)
+                deps = q.get("depende_de") or []
+                l3_txt = "após " + ",".join(f"#{d}" for d in deps) if deps else (q["materia"] or "raiz")
+                l3 = Text(l3_txt, style=(a.cor("yellow") if bloq else a.cor("mudo")) + fundo)
+                caixa = [Text("┌" + "─" * (bw - 2) + "┐", style=borda)]
+                for cont in (l1, l2, l3):
+                    c = Text("│ ", style=borda)
+                    corpo = ajustar(cont, bw - 4)
+                    if cursor:
+                        corpo.stylize(f"on {a.cor('selecao')}")
+                    c.append_text(corpo)
+                    c.append(" │", style=borda)
+                    caixa.append(c)
+                caixa.append(Text("└" + "─" * (bw - 2) + "┘", style=borda))
+                caixas.append(caixa)
+                x0 = 1 + idx_c * cw
+                self._caixas.append((x0, y0, x0 + bw, y0 + 5, q))
+            for row_i in range(5):
+                t = Text(" ")
+                for idx_c in range(cols):
+                    t.append_text(caixas[idx_c][row_i])
+                    t.append(" " * max(1, cw - bw))
+                linhas.append(t)
+            if idx_l < len(self._grade) - 1:
+                con = Text(" ")
+                for idx_c in range(cols):
+                    con.append(" " * (bw // 2) + "│" + " " * (cw - bw // 2 - 1), style=a.cor("linha"))
+                linhas.append(con)
+        return D.juntar(linhas)
+
+
 class JanelaQuests(Janela):
     NOME = "quests"
     DEFAULT_CSS = """
@@ -137,6 +300,7 @@ class JanelaQuests(Janela):
     JanelaQuests Abas { margin-top: 1; }
     JanelaQuests #q-cab { height: 2; margin-top: 1; }
     JanelaQuests Lista { height: 1fr; }
+    JanelaQuests #q-arvore-scroll { height: 1fr; display: none; margin-top: 1; }
     JanelaQuests #q-pe { height: 3; }
     """
 
@@ -144,6 +308,8 @@ class JanelaQuests(Janela):
         yield Abas(ABAS, "arco", id="q-abas")
         yield Pintado(self._cab, id="q-cab")
         yield Lista(self._linha, altura=2, id="q-lista", arrastar=True, cursor_apagado=True)
+        with VerticalScroll(id="q-arvore-scroll"):
+            yield ArvoreQuests(id="q-arvore")
         yield Pintado(self._pe, id="q-pe")
 
     def itens(self) -> list[dict]:
@@ -175,7 +341,21 @@ class JanelaQuests(Janela):
         ar = a.b.um("SELECT nome FROM arcos WHERE id = ?", (p.arco_id,))
         self.titulo("quests", ar[0] if p.aba == "arco" and ar else dict(ABAS)[p.aba])
         l = self.query_one(Lista)
+        arv_scroll = self.query_one("#q-arvore-scroll")
+        cab = self.query_one("#q-cab")
         itens = self.itens()
+        if p.aba == "arvore":
+            l.display = False
+            cab.display = False
+            arv_scroll.display = True
+            atual = self.query_one(ArvoreQuests).definir(itens)
+            for w in self.query(Pintado):
+                w.pintar()
+            p.mostrar(atual)
+            return
+        l.display = True
+        cab.display = True
+        arv_scroll.display = False
         cursor = None
         if p.quest_alvo is not None:
             cursor = next((i for i, q in enumerate(itens) if q["id"] == p.quest_alvo), None)
@@ -301,7 +481,15 @@ class JanelaQuests(Janela):
             mover(True, None)
 
     def atual(self):
+        if self.pg.aba == "arvore":
+            return self.query_one(ArvoreQuests).atual()
         return self.query_one(Lista).item_atual()
+
+    def focar_entrada(self) -> None:
+        if self.pg.aba == "arvore":
+            self.query_one(ArvoreQuests).focus()
+        else:
+            self.query_one(Lista).focus()
 
     def rodape(self):
         return [("enter", "abrir", "noop"), ("n", "nova", "noop"), ("espaço", "concluir", "noop"), ("a", "aprovar rascunho", "noop"),
@@ -454,7 +642,15 @@ class JanelaRascunhos(Janela):
         self.pg.action_editar()
 
     def atual(self):
+        if self.pg.aba == "arvore":
+            return self.query_one(ArvoreQuests).atual()
         return self.query_one(Lista).item_atual()
+
+    def focar_entrada(self) -> None:
+        if self.pg.aba == "arvore":
+            self.query_one(ArvoreQuests).focus()
+        else:
+            self.query_one(Lista).focus()
 
     def rodape(self):
         return [("a", "aprovar", "noop"), ("e", "editar", "noop"), ("d", "descartar", "noop"), ("shift+a", "aprova todos", "noop")]
