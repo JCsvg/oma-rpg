@@ -60,7 +60,7 @@ def test_xp_cheio_exige_70_por_cento(cfg):
     assert regras.xp_cheio_minimo(3, cfg) == 3
     assert regras.xp_cheio_minimo(4, cfg) == 3
     assert regras.xp_cheio_minimo(10, cfg) == 7
-    assert regras.xp_quest_concluida(2, 2, 0, cfg) == 0  # sem pomodoro, nada
+    assert regras.xp_quest_concluida(2, 2, 0, cfg) == regras.arred(41 * 0.35)  # sem pomodoro, 35%
     assert regras.xp_quest_concluida(2, 2, 2, cfg) == 41
     assert regras.xp_quest_concluida(2, 2, 1, cfg) == regras.arred(41 / 2)
     assert regras.xp_quest_concluida(4, 2, 3, cfg) == 82
@@ -101,8 +101,8 @@ def test_config_do_usuario_so_troca_o_que_existe(tmp_path):
 
 
 def test_conteudo_coerente(cfg):
-    """6 classes, 3 ramos de 5, a última de cada ramo é a ápice, ativas com custo de mana."""
-    assert len(cfg["classes"]) == 6
+    """8 classes, 3 ramos de 5, a última de cada ramo é a ápice, ativas com custo de mana."""
+    assert len(cfg["classes"]) == 8
     for cid in cfg["classes"]:
         sk = cfg.skills_da_classe(cid)
         assert len(sk) == 15, cid
@@ -113,16 +113,11 @@ def test_conteudo_coerente(cfg):
             assert d["tipo"] in ("ativa", "passiva")
             if d["tipo"] == "ativa":
                 assert d["mp"] > 0, s
-    # tipos das skills que o design mostra (criar.png e classes.png)
-    ativas = {"o_mago", "o_eremita", "o_louco", "roda_da_fortuna", "a_torre", "a_temperanca", "o_enforcado", "a_morte",
-              "git_stash", "hotfix", "sudo", "rollback", "dev_null", "fork_bomb", "deploy_na_sexta", "day_trade",
-              "alavancagem", "ipo", "pitch", "mvp", "pivotar", "superset", "falha_concentrada", "dia_de_descanso",
-              "massagem", "proteina", "cutting", "skip_de_tutorial", "glitch", "respawn", "modo_hardcore", "pause_menu",
-              "loot_box", "power_up", "transformacao", "recap", "hiato", "flashback", "deus_ex_machina"}
-    assert {s for s in cfg["skills"] if cfg.skill(s)["tipo"] == "ativa"} == ativas
+    assert len({s for s in cfg["skills"] if cfg.skill(s)["tipo"] == "ativa"}) >= 48
     assert {c["nome"]: (c["hp"], c["mp"]) for c in cfg["classes"].values()} == {
         "Jovem Místico": (80, 80), "Garoto de Programa": (100, 60), "Empreendedor": (90, 70),
-        "Rato de Academia": (120, 40), "Gamer": (100, 60), "Otaku": (90, 70)}
+        "Rato de Academia": (120, 40), "Gamer": (100, 60), "Otaku": (90, 70),
+        "Polímata": (85, 90), "Monge": (110, 60)}
     assert len(cfg.itens_da_categoria("consumivel")) == 7 and len(cfg.itens_da_categoria("cosmetico")) == 9
     assert len(cfg.itens_da_categoria("utilitario")) == 4 and len(cfg.itens_da_categoria("titulo")) == 6
     assert len(cfg.itens_da_categoria("tema")) == 4

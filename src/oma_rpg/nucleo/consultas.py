@@ -131,6 +131,14 @@ def passivos(b, cfg, dia: str, h=None) -> defaultdict:
         for cid in cd[:2]:
             c = cfg["cartas"][cid]
             P[c["efeito"]] += float(c["valor"])
+    if h["classe"] == "polimata":
+        P["xp_pericia"] += 25.0
+        P["critico_pct"] += 10.0
+    elif h["classe"] == "monge":
+        P["xp_confirmacao"] += 30.0
+        P["cura_quest"] += 3.0
+    for k, v in regras.bonus_atributos(dict(h)).items():
+        P[k] += float(v)
     return P
 
 
@@ -204,6 +212,14 @@ def depende_de(row) -> list[int]:
         return []
 
 
+def pericias_quest(row) -> list[str]:
+    try:
+        v = json.loads((row["pericias"] if "pericias" in row.keys() else "[]") or "[]")
+        return [str(x).strip() for x in v if str(x).strip()][:6]
+    except (ValueError, TypeError):
+        return []
+
+
 def quest_dict(b, cfg, q, dia: str | None = None) -> dict:
     daily = q["tipo"] == "daily"
     feitos = quest_feitos(b, q["id"], dia if daily and dia else None)
@@ -218,6 +234,7 @@ def quest_dict(b, cfg, q, dia: str | None = None) -> dict:
     return {
         "id": q["id"], "titulo": q["titulo"], "materia": q["materia"], "est": q["est"], "dif": q["dif"],
         "prio": prio, "depende_de": deps, "faltam_deps": faltam, "bloqueada": bool(faltam),
+        "pericias": pericias_quest(q),
         "arco": q["arco_nome"], "arco_id": q["arco_id"], "prazo": q["prazo"], "tipo": q["tipo"], "estado": q["estado"],
         "origem": q["origem"], "porque": q["porque"], "feitos": feitos, "xp": xp, "bits": regras.bits_de(xp, cfg),
         "hoje": bool(q["hoje"]), "ordem": q["ordem"], "subtarefas": subtarefas(q), "nota": q["nota"],
@@ -302,9 +319,13 @@ def status(b, cfg, agora: float) -> dict:
             "nome": h["nome"], "classe": cls["nome"], "classe_id": h["classe"], "nivel": h["nivel"],
             "titulo": titulo(cfg, h), "xp": h["xp"], "xp_proximo": regras.xp_nivel(h["nivel"], cfg),
             "hp": h["hp"], "hp_max": hp_max(cfg, h, P), "mp": h["mp"], "mp_max": mp_max(cfg, h, P),
-            "bits": h["bits"], "pontos": h["pontos"], "combo": combo_de(cfg, h, P, agora),
+            "bits": h["bits"], "pontos": h["pontos"], "pontos_attr": h["pontos_attr"] if "pontos_attr" in h.keys() else 0,
+            "combo": combo_de(cfg, h, P, agora),
             "streak": streak_atual(h, dia), "melhor_streak": h["melhor_streak"],
         },
+        "atributos": atributos(h),
+        "pericias": pericias(b, cfg),
+        "perfil": perfil(b),
         "hoje": {"dia": dia, "pomodoros": feitos, "meta": cfg["pomodoro"]["meta_diaria"], "teto": teto(cfg, P),
                  "overtraining": feitos >= teto(cfg, P)},
         "pomodoro": {"fase": a["fase"], "restante_s": int(restante(a, agora)), "pausado": bool(a["pausado_em"]),
@@ -432,6 +453,40 @@ def progresso_conquista(b, h, c: dict, dia: str) -> int:
         return int(b.escalar("SELECT COUNT(*) FROM commits WHERE vinculado = 1 AND xp > 0", (), 0))
     if t == "arcos":
         return int(b.escalar("SELECT COUNT(*) FROM arcos WHERE bonus_em IS NOT NULL", (), 0))
+    return 0
+
+
+def atributos(h) -> dict:
+    if h is None:
+        return {"for": 1, "agi": 1, "vig": 1, "int": 1, "con": 1, "pre": 1, "pontos": 0,
+                "bonus": regras.bonus_atributos({})}
+    hd = dict(h)
+    d = {k: int(hd.get(f"attr_{k}", 1) or 1) for k, *_ in regras.ATRIBUTOS}
+    d["pontos"] = int(hd.get("pontos_attr", 0) or 0)
+    d["bonus"] = regras.bonus_atributos(hd)
+    return d
+
+
+def pericias(b, cfg, estado: str | None = None) -> list[dict]:
+    sql = "SELECT * FROM pericias"
+    args: tuple = ()
+    if estado:
+        sql += " WHERE estado = ?"
+        args = (estado,)
+    sql += " ORDER BY estado != 'aprovada', nivel DESC, xp DESC, nome"
+    saida = []
+    for r in b.todos(sql, args):
+        xp_prox = regras.xp_pericia_nivel(r["nivel"], cfg)
+        saida.append({"id": r["id"], "nome": r["nome"], "xp": r["xp"], "nivel": r["nivel"],
+                      "xp_proximo": xp_prox, "estado": r["estado"], "origem": r["origem"]})
+    return saida
+
+
+def perfil(b) -> dict:
+    r = b.um("SELECT * FROM perfil WHERE id = 1")
+    if r is None:
+        return {}
+    return {k: r[k] for k in r.keys() if k != "id"}
     return 0
 
 

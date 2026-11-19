@@ -15,6 +15,38 @@ import re
 
 DIFS = {1: "fácil", 2: "média", 3: "difícil"}
 DIAMANTES = {1: "◆◇◇", 2: "◆◆◇", 3: "◆◆◆"}
+ATRIBUTOS = (
+    ("for", "Força", "For", "+3% XP em quests só confirmadas e +1 de cura por ponto acima de 1"),
+    ("agi", "Agilidade", "Agi", "+2% XP de commit e +0,02 no combo máximo por ponto acima de 1"),
+    ("vig", "Vigor", "Vig", "+4 de HP máximo por ponto acima de 1"),
+    ("int", "Intelecto", "Int", "+3% XP de perícia e +2% XP de quest com foco por ponto acima de 1"),
+    ("con", "Consciência", "Con", "+2% XP de pomodoro e +2 de mana máxima por ponto acima de 1"),
+    ("pre", "Presença", "Pre", "+3% de Bits ganhos e +1% de desconto na loja por ponto acima de 1"),
+)
+ATTR_SIGLAS = {k: sig for k, _, sig, _ in ATRIBUTOS}
+
+
+def bonus_atributos(attrs: dict) -> dict:
+    """Converte os 6 atributos do herói em bônus numéricos concretos."""
+    ex = {k: max(0, int(attrs.get(f"attr_{k}", attrs.get(k, 1))) - 1) for k, *_ in ATRIBUTOS}
+    return {
+        "xp_confirmacao": ex["for"] * 3.0,
+        "cura_extra": ex["for"],
+        "xp_commit": ex["agi"] * 2.0,
+        "combo_max": round(ex["agi"] * 0.02, 2),
+        "hp_max": ex["vig"] * 4,
+        "xp_pericia": ex["int"] * 3.0,
+        "xp_quest_foco": ex["int"] * 2.0,
+        "xp_pomodoro": ex["con"] * 2.0,
+        "mp_max": ex["con"] * 2,
+        "bits": ex["pre"] * 3.0,
+        "desconto_loja": min(25, ex["pre"]),
+    }
+
+
+def xp_pericia_nivel(nivel: int, cfg) -> int:
+    p = cfg["pericia"]
+    return p["xp_base"] + p["xp_passo"] * max(0, int(nivel) - 1)
 
 
 def arred(x: float) -> int:
@@ -44,14 +76,16 @@ def xp_cheio_minimo(est: int, cfg) -> int:
     return max(1, math.ceil(int(est) * cfg["quest"]["xp_cheio_fracao"] - 1e-9))
 
 
-def xp_quest_concluida(est: int, dif: int, feitos: int, cfg, bonus_pct: float = 0.0) -> int:
-    """Sem pomodoro, zero. Com 70% dos estimados, o XP cheio; antes disso, proporcional."""
-    if feitos <= 0:
-        return 0
+def xp_quest_concluida(est: int, dif: int, feitos: int, cfg, bonus_pct: float = 0.0,
+                       sem_pomodoro_pct: float = 0.0) -> int:
+    """Sem pomodoro vale a fração reduzida (35%); com 70% dos estimados vale 100%; entre eles, proporcional."""
     cheio = xp_quest(est, dif, cfg)
+    frac_sem = float(cfg["quest"].get("sem_pomodoro_fracao", 0.35))
+    if feitos <= 0:
+        return max(1, arred(cheio * frac_sem * (1 + (bonus_pct + sem_pomodoro_pct) / 100)))
     precisa = xp_cheio_minimo(est, cfg)
-    base = cheio if feitos >= precisa else cheio * feitos / precisa
-    return arred(base * (1 + bonus_pct / 100))
+    base = cheio if feitos >= precisa else max(cheio * frac_sem, cheio * feitos / precisa)
+    return max(1, arred(base * (1 + bonus_pct / 100)))
 
 
 def combo_max(cfg, gamer: bool, extra: float = 0.0) -> float:

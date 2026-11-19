@@ -15,7 +15,8 @@ from __future__ import annotations
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.nucleo.jogo import ErroJogo
 
-CAMPOS_QUEST = {"titulo", "materia", "est", "dif", "prio", "depende_de", "arco", "prazo", "porque", "desc", "descricao"}
+CAMPOS_QUEST = {"titulo", "materia", "est", "dif", "prio", "depende_de", "pericias", "arco", "prazo", "porque", "desc",
+                "descricao"}
 
 
 class ErroPapel(ErroJogo):
@@ -53,7 +54,15 @@ COMANDOS: dict[str, tuple] = {
     # pedir não libera: só registra o pedido, e a interface pergunta ao jogador
     "pedir_pasta": (lambda j, a: j.pedir_pasta(a.get("caminho"), a.get("motivo", "")), {"caminho", "motivo"}, False),
     # daqui para baixo, só a interface (papel jogador)
-    "criar_heroi": (lambda j, a: j.criar_heroi(a.get("nome"), a.get("classe")), {"nome", "classe"}, True),
+    "criar_heroi": (lambda j, a: j.criar_heroi(a.get("nome"), a.get("classe"), a.get("perfil")), {"nome", "classe", "perfil"}, True),
+    "salvar_perfil": (lambda j, a: j.salvar_perfil(**a),
+                      {"ocupacao", "objetivos", "altura_cm", "peso_kg", "treina", "treino_tipo", "treino_freq",
+                       "tempo_estudo", "atencao", "estilo_estudo", "rotina", "estilo_vida", "sono",
+                       "obstaculos", "tamanho_bloco", "pericias_iniciais"}, True),
+    "gastar_atributo": (lambda j, a: j.gastar_atributo(a.get("attr")), {"attr"}, True),
+    "nova_pericia": (lambda j, a: j.nova_pericia(a.get("nome")), {"nome"}, True),
+    "aprovar_pericia": (lambda j, a: j.aprovar_pericia(a.get("id")), {"id"}, True),
+    "remover_pericia": (lambda j, a: j.remover_pericia(a.get("id")), {"id"}, True),
     "trocar_classe": (lambda j, a: j.trocar_classe(a.get("classe")), {"classe"}, True),
     "konami": (lambda j, a: j.konami(), set(), True),
     "acordar": (lambda j, a: j.acordar(), set(), True),

@@ -18,6 +18,11 @@
 #   daily_hp, abandono_hp                     a penalidade cai valor%
 #   backup                                    no desmaio, guarda o streak de ontem
 #   juros, chefe, virada                      reforçam a mecânica da classe
+#   xp_pericia                                +valor% de XP em perícias
+#   xp_confirmacao                            +valor% de XP em quests só confirmadas (sem pomodoro)
+#   cura_quest                                cura +valor de HP ao concluir uma quest
+#   desconto_loja                             desconto de valor% nos itens da loja
+#   critico_pct                               valor% de chance de crítico (+50% XP) ao concluir pomodoro/quest
 # Efeitos das ativas (gastam mana, uma vez por dia cada):
 #   guardar        guarda o pomodoro em andamento sem custo e sem perder o combo
 #   proximo_xp     o próximo pomodoro concluído vale +valor%
@@ -32,6 +37,8 @@
 #   combo_mais     o combo sobe valor degraus agora
 #   commit_mais    os commits do pomodoro em andamento valem +valor%
 #   carta          tira outra carta do dia (Jovem Místico)
+#   proxima_quest_xp  a próxima quest concluída vale +valor% de XP e +valor% nas perícias
+#   foco_pericia   dobra o XP de perícia na próxima quest concluída (+valor% extra)
 
 [classes.mistico]
 ordem = 1
@@ -150,7 +157,47 @@ titulos = ["Novato", "Fã", "Weeb", "Senpai", "Sensei", "Protagonista"]
 dia = [
   "Com menos de 30% de HP vem a virada: o pomodoro vale x2.",
   "O chefe do arco vale +50% para o Otaku.",
-  "Slice of Life cura nas pausas.",
+  "Slice of Life cura nas pausas e ao fechar episódio.",
+]
+
+[classes.polimata]
+ordem = 7
+nome = "Polímata"
+sigla = "PO"
+icone = "polimata"
+cor = "yellow"
+tema = "perícias variadas, síntese e maestria"
+poder = "sinergia"
+poder_titulo = "Sinergia"
+poder_txt = "Quests que treinam perícias ganham +25% de XP nas perícias e +10% de chance de crítico."
+hp = 85
+mp = 90
+ramos = ["Erudição", "Síntese", "Maestria"]
+titulos = ["Curioso", "Aprendiz", "Generalista", "Estudioso", "Sábio", "Polímata"]
+dia = [
+  "Toda perícia sobe mais rápido com bônus de Sinergia (+25% XP de perícia).",
+  "Insights dão chance de crítico (+50% XP) ao fechar pomodoros e quests.",
+  "Fichamento turbina a próxima quest concluída.",
+]
+
+[classes.monge]
+ordem = 8
+nome = "Monge"
+sigla = "MN"
+icone = "monge"
+cor = "green"
+tema = "disciplina, hábitos reais e constância"
+poder = "disciplina"
+poder_titulo = "Disciplina"
+poder_txt = "Quests só confirmadas (academia, hábitos, rotina) valem +30% de XP e curam +3 de HP."
+hp = 110
+mp = 60
+ramos = ["Zen", "Corpo", "Constância"]
+titulos = ["Noviço", "Praticante", "Asceta", "Discípulo", "Mestre Zen", "Iluminado"]
+dia = [
+  "Quests concluídas sem pomodoro valem +30% XP e curam +3 HP.",
+  "Respiração segura perdas de HP; hábito diário protege o streak.",
+  "Disciplina reduz o custo de vida das dailies vencidas.",
 ]
 
 # ---------------------------------------------------------------- skills
@@ -177,14 +224,14 @@ root = { classe = "programa", ramo = 2, pos = 4, nome = "root", tipo = "passiva"
 o_mago = { classe = "mistico", ramo = 0, pos = 0, nome = "O Mago", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 25, desc = "o próximo pomodoro vale +25% de XP", frase = "Tudo o que precisa já está na mesa." }
 a_sacerdotisa = { classe = "mistico", ramo = 0, pos = 1, nome = "A Sacerdotisa", tipo = "passiva", efeito = "mp_pausa", valor = 2, desc = "pausa respeitada dá +2 de mana", frase = "O silêncio também ensina." }
 o_eremita = { classe = "mistico", ramo = 0, pos = 2, nome = "O Eremita", tipo = "ativa", mp = 10, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "Uma lanterna basta." }
-o_hierofante = { classe = "mistico", ramo = 0, pos = 3, nome = "O Hierofante", tipo = "passiva", efeito = "xp_quest", valor = 10, desc = "quests concluídas valem +10% de XP", frase = "A tradição tem seus motivos." }
+o_hierofante = { classe = "mistico", ramo = 0, pos = 3, nome = "O Hierofante", tipo = "passiva", efeito = "xp_pericia", valor = 20, desc = "perícias valem +20% de XP", frase = "A tradição tem seus motivos." }
 o_mundo = { classe = "mistico", ramo = 0, pos = 4, nome = "O Mundo", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "O ciclo se fecha." }
 o_louco = { classe = "mistico", ramo = 1, pos = 0, nome = "O Louco", tipo = "ativa", mp = 5, efeito = "sorte", valor = 0, desc = "o próximo pomodoro vale de 0,5x a 2x", frase = "Um passo no vazio." }
 roda_da_fortuna = { classe = "mistico", ramo = 1, pos = 1, nome = "Roda da Fortuna", tipo = "ativa", mp = 8, efeito = "carta", valor = 0, desc = "tira outra carta do dia", frase = "Gira de novo." }
 a_justica = { classe = "mistico", ramo = 1, pos = 2, nome = "A Justiça", tipo = "passiva", efeito = "daily_hp", valor = 50, desc = "daily vencida custa metade do HP", frase = "Cada um paga o que deve, e só." }
 a_torre = { classe = "mistico", ramo = 1, pos = 3, nome = "A Torre", tipo = "ativa", mp = 12, efeito = "torre", valor = 50, desc = "zera o combo e o próximo pomodoro vale +50%", frase = "Derruba para construir de novo." }
 a_estrela = { classe = "mistico", ramo = 1, pos = 4, nome = "A Estrela", tipo = "passiva", efeito = "bits", valor = 15, desc = "+15% de Bits em toda quest", frase = "Depois da tempestade." }
-a_imperatriz = { classe = "mistico", ramo = 2, pos = 0, nome = "A Imperatriz", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura 2 de HP", frase = "Cuidar também é trabalho." }
+a_imperatriz = { classe = "mistico", ramo = 2, pos = 0, nome = "A Imperatriz", tipo = "passiva", efeito = "cura_quest", valor = 4, desc = "concluir quest cura 4 de HP", frase = "Cuidar também é trabalho." }
 a_temperanca = { classe = "mistico", ramo = 2, pos = 1, nome = "A Temperança", tipo = "ativa", mp = 15, efeito = "mana_hp", valor = 15, desc = "troca 15 de mana por 15 de HP", frase = "Nem tanto ao céu, nem tanto à terra." }
 o_enforcado = { classe = "mistico", ramo = 2, pos = 2, nome = "O Enforcado", tipo = "ativa", mp = 8, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Parar também é um movimento." }
 a_morte = { classe = "mistico", ramo = 2, pos = 3, nome = "A Morte", tipo = "ativa", mp = 12, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Fim de um ciclo, não de você." }
@@ -193,7 +240,7 @@ o_sol = { classe = "mistico", ramo = 2, pos = 4, nome = "O Sol", tipo = "passiva
 # Empreendedor
 poupanca = { classe = "empreendedor", ramo = 0, pos = 0, nome = "Poupança", tipo = "passiva", efeito = "juros", valor = 0.5, desc = "os juros sobem 0,5 ponto", frase = "Pouco a pouco." }
 juros_compostos = { classe = "empreendedor", ramo = 0, pos = 1, nome = "Juros compostos", tipo = "passiva", efeito = "juros_max", valor = 50, desc = "o teto dos juros sobe 50 Bits", frase = "A oitava maravilha." }
-dividendos = { classe = "empreendedor", ramo = 0, pos = 2, nome = "Dividendos", tipo = "passiva", efeito = "bits", valor = 10, desc = "+10% de Bits", frase = "Pingando todo mês." }
+dividendos = { classe = "empreendedor", ramo = 0, pos = 2, nome = "Dividendos", tipo = "passiva", efeito = "desconto_loja", valor = 10, desc = "itens da loja custam 10% menos Bits", frase = "Pingando todo mês." }
 diversificar = { classe = "empreendedor", ramo = 0, pos = 3, nome = "Diversificar", tipo = "passiva", efeito = "mp_max", valor = 10, desc = "+10 de mana máxima", frase = "Nem tudo na mesma cesta." }
 holding = { classe = "empreendedor", ramo = 0, pos = 4, nome = "Holding", tipo = "passiva", efeito = "bits", valor = 20, desc = "+20% de Bits", frase = "Empresa de empresas." }
 day_trade = { classe = "empreendedor", ramo = 1, pos = 0, nome = "Day trade", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 30, desc = "o próximo pomodoro vale +30% de XP", frase = "Compra na baixa." }
@@ -208,13 +255,13 @@ networking = { classe = "empreendedor", ramo = 2, pos = 3, nome = "Networking", 
 escalar = { classe = "empreendedor", ramo = 2, pos = 4, nome = "Escalar", tipo = "passiva", efeito = "teto", valor = 2, desc = "o teto diário sobe 2 pomodoros", frase = "Do zero ao milhão." }
 
 # Rato de Academia
-aquecimento = { classe = "rato", ramo = 0, pos = 0, nome = "Aquecimento", tipo = "passiva", efeito = "xp_pomodoro", valor = 5, desc = "pomodoros valem +5% de XP", frase = "Cinco minutos de esteira." }
+aquecimento = { classe = "rato", ramo = 0, pos = 0, nome = "Aquecimento", tipo = "passiva", efeito = "xp_confirmacao", valor = 25, desc = "quests só confirmadas (treino/hábito) valem +25% XP", frase = "Cinco minutos de esteira." }
 progressao_de_carga = { classe = "rato", ramo = 0, pos = 1, nome = "Progressão de carga", tipo = "passiva", efeito = "combo_max", valor = 0.1, desc = "o combo vai até x1.6", frase = "Um quilo a mais por semana." }
 superset = { classe = "rato", ramo = 0, pos = 2, nome = "Superset", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 30, desc = "o próximo pomodoro vale +30% de XP", frase = "Sem descanso entre as séries." }
 falha_concentrada = { classe = "rato", ramo = 0, pos = 3, nome = "Falha concentrada", tipo = "ativa", mp = 10, efeito = "arriscar", valor = 60, desc = "o próximo pomodoro vale +60%, mas abandonar custa o dobro", frase = "Até a última repetição." }
 pr = { classe = "rato", ramo = 0, pos = 4, nome = "PR", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "Recorde pessoal." }
 dia_de_descanso = { classe = "rato", ramo = 1, pos = 0, nome = "Dia de descanso", tipo = "ativa", mp = 8, efeito = "cura", valor = 20, desc = "+20 de HP", frase = "O músculo cresce no descanso." }
-alongamento = { classe = "rato", ramo = 1, pos = 1, nome = "Alongamento", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura mais 2 de HP", frase = "Dez segundos de cada lado." }
+alongamento = { classe = "rato", ramo = 1, pos = 1, nome = "Alongamento", tipo = "passiva", efeito = "cura_quest", valor = 5, desc = "concluir quest cura 5 de HP", frase = "Dez segundos de cada lado." }
 sono = { classe = "rato", ramo = 1, pos = 2, nome = "Sono", tipo = "passiva", efeito = "hp_dia", valor = 10, desc = "a virada do dia cura mais 10 de HP", frase = "Oito horas." }
 massagem = { classe = "rato", ramo = 1, pos = 3, nome = "Massagem", tipo = "ativa", mp = 12, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Tira o nó." }
 supercompensacao = { classe = "rato", ramo = 1, pos = 4, nome = "Supercompensação", tipo = "passiva", efeito = "mp_max", valor = 20, desc = "+20 de mana máxima", frase = "Volta mais forte." }
@@ -227,7 +274,7 @@ bulking = { classe = "rato", ramo = 2, pos = 4, nome = "Bulking", tipo = "passiv
 # Gamer
 skip_de_tutorial = { classe = "gamer", ramo = 0, pos = 0, nome = "Skip de Tutorial", tipo = "ativa", mp = 5, efeito = "proximo_xp", valor = 25, desc = "o próximo pomodoro vale +25% de XP", frase = "Já sei jogar." }
 glitch = { classe = "gamer", ramo = 0, pos = 1, nome = "Glitch", tipo = "ativa", mp = 8, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "Atravessou a parede." }
-any_pct = { classe = "gamer", ramo = 0, pos = 2, nome = "Any%", tipo = "passiva", efeito = "xp_pomodoro", valor = 5, desc = "pomodoros valem +5% de XP", frase = "Vale qualquer caminho." }
+any_pct = { classe = "gamer", ramo = 0, pos = 2, nome = "Any%", tipo = "passiva", efeito = "critico_pct", valor = 15, desc = "15% de chance de crítico (+50% XP) ao fechar pomodoro/quest", frase = "Vale qualquer caminho." }
 frame_perfect = { classe = "gamer", ramo = 0, pos = 3, nome = "Frame Perfect", tipo = "passiva", efeito = "combo_max", valor = 0.1, desc = "o combo vai até x2.1", frase = "Um sexagésimo de segundo." }
 world_record = { classe = "gamer", ramo = 0, pos = 4, nome = "World Record", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "Topo do leaderboard." }
 checkpoint = { classe = "gamer", ramo = 1, pos = 0, nome = "Checkpoint", tipo = "passiva", efeito = "backup", valor = 0, desc = "no desmaio, o streak de ontem fica guardado", frase = "Salvou aqui." }
@@ -247,7 +294,7 @@ power_up = { classe = "otaku", ramo = 0, pos = 1, nome = "Power Up", tipo = "ati
 transformacao = { classe = "otaku", ramo = 0, pos = 2, nome = "Transformação", tipo = "ativa", mp = 12, efeito = "proximo_xp", valor = 40, desc = "o próximo pomodoro vale +40% de XP", frase = "O cabelo mudou de cor." }
 poder_da_amizade = { classe = "otaku", ramo = 0, pos = 3, nome = "Poder da Amizade", tipo = "passiva", efeito = "xp_commit", valor = 10, desc = "commits valem +10% de XP", frase = "Ninguém luta sozinho." }
 forma_final = { classe = "otaku", ramo = 0, pos = 4, nome = "Forma Final", tipo = "passiva", efeito = "virada", valor = 50, desc = "a virada vale x2,5", frase = "Este é o meu verdadeiro poder." }
-slice_of_life = { classe = "otaku", ramo = 1, pos = 0, nome = "Slice of Life", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura 2 de HP", frase = "Chá depois da aula." }
+slice_of_life = { classe = "otaku", ramo = 1, pos = 0, nome = "Slice of Life", tipo = "passiva", efeito = "cura_quest", valor = 4, desc = "concluir quest cura 4 de HP", frase = "Chá depois da aula." }
 filler = { classe = "otaku", ramo = 1, pos = 1, nome = "Filler", tipo = "passiva", efeito = "mp_pausa", valor = 2, desc = "pausa respeitada dá +2 de mana", frase = "Episódio de praia." }
 recap = { classe = "otaku", ramo = 1, pos = 2, nome = "Recap", tipo = "ativa", mp = 10, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Anteriormente..." }
 hiato = { classe = "otaku", ramo = 1, pos = 3, nome = "Hiato", tipo = "ativa", mp = 10, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Volta na próxima temporada." }
@@ -257,6 +304,40 @@ flashback = { classe = "otaku", ramo = 2, pos = 1, nome = "Flashback", tipo = "a
 cliffhanger = { classe = "otaku", ramo = 2, pos = 2, nome = "Cliffhanger", tipo = "passiva", efeito = "chefe", valor = 25, desc = "o chefe do arco vale +25%", frase = "Continua..." }
 momento_de_virada = { classe = "otaku", ramo = 2, pos = 3, nome = "Momento de Virada", tipo = "passiva", efeito = "virada_limite", valor = 10, desc = "a virada começa com 40% de HP", frase = "Agora é sério." }
 deus_ex_machina = { classe = "otaku", ramo = 2, pos = 4, nome = "Deus Ex Machina", tipo = "ativa", mp = 30, efeito = "cura", valor = 999, desc = "cura toda a vida", frase = "Do nada, a salvação." }
+
+# Polímata
+leitura_dinamica = { classe = "polimata", ramo = 0, pos = 0, nome = "Leitura Dinâmica", tipo = "passiva", efeito = "xp_pericia", valor = 15, desc = "perícias ganham +15% de XP", frase = "Pega a ideia central primeiro." }
+fichamento = { classe = "polimata", ramo = 0, pos = 1, nome = "Fichamento", tipo = "ativa", mp = 6, efeito = "proxima_quest_xp", valor = 40, desc = "próxima quest concluída vale +40% de XP", frase = "Resumir é aprender duas vezes." }
+bibliografia = { classe = "polimata", ramo = 0, pos = 2, nome = "Bibliografia", tipo = "passiva", efeito = "xp_quest", valor = 10, desc = "quests concluídas valem +10% de XP", frase = "Uma referência leva a outra." }
+erudicao_profunda = { classe = "polimata", ramo = 0, pos = 3, nome = "Erudição Profunda", tipo = "passiva", efeito = "mp_max", valor = 20, desc = "+20 de mana máxima", frase = "Repertório nunca pesa." }
+enciclopedia = { classe = "polimata", ramo = 0, pos = 4, nome = "Enciclopédia", tipo = "passiva", efeito = "xp_pericia", valor = 30, desc = "perícias ganham +30% de XP", frase = "Tudo se conecta." }
+mapa_mental = { classe = "polimata", ramo = 1, pos = 0, nome = "Mapa Mental", tipo = "ativa", mp = 8, efeito = "foco_pericia", valor = 100, desc = "dobra o XP de perícia na próxima quest", frase = "Do centro para os ramos." }
+metodo_feynman = { classe = "polimata", ramo = 1, pos = 1, nome = "Método Feynman", tipo = "passiva", efeito = "critico_pct", valor = 15, desc = "15% de chance de crítico (+50% XP)", frase = "Se não sabe explicar simples, não entendeu." }
+pausa_criativa = { classe = "polimata", ramo = 1, pos = 2, nome = "Pausa Criativa", tipo = "ativa", mp = 8, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "O cérebro resolve no chuveiro." }
+revisao_espacada = { classe = "polimata", ramo = 1, pos = 3, nome = "Revisão Espaçada", tipo = "passiva", efeito = "mp_pausa", valor = 3, desc = "pausa respeitada dá +3 de mana", frase = "Na hora certa de esquecer." }
+sinapse_pura = { classe = "polimata", ramo = 1, pos = 4, nome = "Sinapse Pura", tipo = "ativa", mp = 16, efeito = "combo_mais", valor = 3, desc = "o combo sobe 3 degraus agora", frase = "Tudo fez sentido." }
+curiosidade = { classe = "polimata", ramo = 2, pos = 0, nome = "Curiosidade", tipo = "passiva", efeito = "bits", valor = 10, desc = "+10% de Bits", frase = "E se eu tentar assim?" }
+insight = { classe = "polimata", ramo = 2, pos = 1, nome = "Insight", tipo = "ativa", mp = 8, efeito = "sorte", valor = 0, desc = "próximo pomodoro vale de 0,5x a 2x", frase = "Estalo súbito." }
+caderno_de_notas = { classe = "polimata", ramo = 2, pos = 2, nome = "Caderno de Notas", tipo = "passiva", efeito = "desconto_loja", valor = 10, desc = "itens da loja custam 10% menos Bits", frase = "Anota antes que fuja." }
+tese = { classe = "polimata", ramo = 2, pos = 3, nome = "Tese", tipo = "ativa", mp = 14, efeito = "proximo_xp", valor = 50, desc = "o próximo pomodoro vale +50% de XP", frase = "Argumento fechado." }
+renascenca = { classe = "polimata", ramo = 2, pos = 4, nome = "Renascença", tipo = "passiva", efeito = "teto", valor = 2, desc = "o teto diário sobe 2 pomodoros", frase = "Arte, ciência e prática." }
+
+# Monge
+atencao_plena = { classe = "monge", ramo = 0, pos = 0, nome = "Atenção Plena", tipo = "passiva", efeito = "xp_confirmacao", valor = 25, desc = "quests só confirmadas valem +25% XP", frase = "Um passo de cada vez." }
+respiracao = { classe = "monge", ramo = 0, pos = 1, nome = "Respiração", tipo = "ativa", mp = 6, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "Inspira quatro, solta seis." }
+silencio_mental = { classe = "monge", ramo = 0, pos = 2, nome = "Silêncio Mental", tipo = "passiva", efeito = "abandono_hp", valor = 50, desc = "abandonar custa metade do HP", frase = "Sem culpa, só retorno." }
+desapego = { classe = "monge", ramo = 0, pos = 3, nome = "Desapego", tipo = "ativa", mp = 6, efeito = "descartar", valor = 0, desc = "dispensa a próxima daily sem penalidade", frase = "Nem toda batalha é sua." }
+iluminacao = { classe = "monge", ramo = 0, pos = 4, nome = "Iluminação", tipo = "passiva", efeito = "xp_confirmacao", valor = 40, desc = "quests só confirmadas valem +40% XP", frase = "Clareza no simples." }
+postura = { classe = "monge", ramo = 1, pos = 0, nome = "Postura", tipo = "passiva", efeito = "cura_quest", valor = 4, desc = "concluir quest cura 4 de HP", frase = "Coluna ereta." }
+passo_firme = { classe = "monge", ramo = 1, pos = 1, nome = "Passo Firme", tipo = "passiva", efeito = "hp_max", valor = 20, desc = "+20 de HP máximo", frase = "Raiz no chão." }
+meditacao = { classe = "monge", ramo = 1, pos = 2, nome = "Meditação", tipo = "ativa", mp = 10, efeito = "cura", valor = 25, desc = "+25 de HP", frase = "Cinco minutos parado." }
+fluxo = { classe = "monge", ramo = 1, pos = 3, nome = "Fluxo", tipo = "ativa", mp = 10, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Água contorna a pedra." }
+corpo_de_ferro = { classe = "monge", ramo = 1, pos = 4, nome = "Corpo de Ferro", tipo = "passiva", efeito = "hp_dia", valor = 15, desc = "a virada do dia cura +15 de HP", frase = "Recuperação silenciosa." }
+habito_matinal = { classe = "monge", ramo = 2, pos = 0, nome = "Hábito Matinal", tipo = "passiva", efeito = "daily_hp", valor = 50, desc = "daily vencida custa metade do HP", frase = "Começa antes do ruído." }
+ritual = { classe = "monge", ramo = 2, pos = 1, nome = "Ritual", tipo = "ativa", mp = 8, efeito = "proxima_quest_xp", valor = 40, desc = "próxima quest concluída vale +40% de XP", frase = "Prepara a mesa antes." }
+disciplina_ferrea = { classe = "monge", ramo = 2, pos = 2, nome = "Disciplina Férrea", tipo = "passiva", efeito = "backup", valor = 0, desc = "no desmaio, o streak de ontem fica guardado", frase = "Um tropeço não zera a estrada." }
+equilibrio = { classe = "monge", ramo = 2, pos = 3, nome = "Equilíbrio", tipo = "ativa", mp = 12, efeito = "mana_hp", valor = 15, desc = "troca 15 de mana por 15 de HP", frase = "Corpo e mente no mesmo peso." }
+constancia_eterna = { classe = "monge", ramo = 2, pos = 4, nome = "Constância Eterna", tipo = "passiva", efeito = "xp_pericia", valor = 20, desc = "perícias ganham +20% de XP", frase = "Todo dia um pouco." }
 
 # ---------------------------------------------------------------- cartas do Jovem Místico
 # Toda manhã sai um buff e um debuff. O efeito usa o mesmo vocabulário das passivas.

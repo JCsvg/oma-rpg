@@ -17,6 +17,7 @@ mult_media = 1.2              # (design)
 mult_dificil = 1.5            # (design)
 bits_divisor = 4              # bits = round(xp / 4)  (design)
 xp_cheio_fracao = 0.7         # XP cheio exige 70% dos pomodoros estimados  (design)
+sem_pomodoro_fracao = 0.35    # concluir só confirmando (0 pomodoros) vale 35% do XP
 est_max = 8                   # quest com mais pomodoros que isso é recusada
 custo_reestimar_bits = 20     # mudar est ou dif depois do primeiro pomodoro; o Pergaminho zera
 chefe_pct = 50                # bônus do chefe do arco: 50% da soma do XP das quests do arco
@@ -59,6 +60,7 @@ xp_nivel_passo = 250
 hp_nivel = 10                 # subir de nível cura 10 de HP  (design)
 bits_nivel = 25               # (design)
 pontos_nivel = 1              # (design)
+pontos_attr_nivel = 2         # pontos de atributo ganhos ao subir de nível
 hp_por_dia = 10               # a virada do dia cura 10 de HP (dormir)
 daily_hp = 8                  # daily vencida  (design)
 desmaio_bits_pct = 10         # (design)
@@ -85,3 +87,7 @@ max_rascunhos_por_dia = 0     # 0 = sem limite diário de rascunhos
 pasta_uma_vez_min = 60        # "liberar uma vez" vale por 60 minutos
 max_pedidos_pasta = 5         # pedidos de pasta pendentes ao mesmo tempo
 espera_pedido_s = 90          # quanto o oma-rpg ls/ver espera o JC responder na taverna
+
+[pericia]
+xp_base = 100                 # XP para passar do nível 1 -> 2 em uma perícia
+xp_passo = 80

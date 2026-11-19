@@ -213,7 +213,7 @@ def test_quest_so_vale_com_pomodoro(heroi):
     q = j.nova_quest(titulo="Lista 4", materia="Compiladores", est=2, dif=2, arco="Compiladores")
     assert q["xp_previsto"] == 41 and q["bits_previstos"] == 10
     r = j.concluir_quest(q["id"])
-    assert r["xp"] == 0 and h(j)["xp_total"] == 0
+    assert r["xp"] == 14 and h(j)["xp_total"] == 21  # 14 (35% sem pomodoro) + 7 (chefe do arco)
     q2 = j.nova_quest(titulo="Lista 5", materia="Compiladores", est=2, dif=2)
     pomodoro(j, quest=q2["id"])
     pomodoro(j, quest=q2["id"])

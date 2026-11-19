@@ -25,7 +25,10 @@ CREATE TABLE IF NOT EXISTS heroi (
   streak INTEGER NOT NULL DEFAULT 0, streak_dia TEXT NOT NULL DEFAULT '', streak_antes INTEGER NOT NULL DEFAULT 0,
   melhor_streak INTEGER NOT NULL DEFAULT 0, ultima_perda INTEGER NOT NULL DEFAULT 0,
   titulo TEXT NOT NULL DEFAULT '', moldura TEXT NOT NULL DEFAULT '', cor_retrato TEXT NOT NULL DEFAULT '',
-  tema_calor TEXT NOT NULL DEFAULT 'green', konami INTEGER NOT NULL DEFAULT 0, criado REAL NOT NULL
+  tema_calor TEXT NOT NULL DEFAULT 'green', konami INTEGER NOT NULL DEFAULT 0, criado REAL NOT NULL,
+  attr_for INTEGER NOT NULL DEFAULT 1, attr_agi INTEGER NOT NULL DEFAULT 1, attr_vig INTEGER NOT NULL DEFAULT 1,
+  attr_int INTEGER NOT NULL DEFAULT 1, attr_con INTEGER NOT NULL DEFAULT 1, attr_pre INTEGER NOT NULL DEFAULT 1,
+  pontos_attr INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS atual (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -45,7 +48,7 @@ CREATE TABLE IF NOT EXISTS quests (
   subtarefas TEXT NOT NULL DEFAULT '[]', nota TEXT NOT NULL DEFAULT '', criada REAL NOT NULL,
   aprovada REAL, concluida REAL, daily_feita TEXT NOT NULL DEFAULT '', daily_livre TEXT NOT NULL DEFAULT '',
   xp_ganho INTEGER NOT NULL DEFAULT 0, reestimou INTEGER NOT NULL DEFAULT 0,
-  prio INTEGER NOT NULL DEFAULT 2, depende_de TEXT NOT NULL DEFAULT '[]'
+  prio INTEGER NOT NULL DEFAULT 2, depende_de TEXT NOT NULL DEFAULT '[]', pericias TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS quests_estado ON quests(estado);
 CREATE TABLE IF NOT EXISTS pomodoros (
@@ -88,6 +91,23 @@ CREATE TABLE IF NOT EXISTS cartas (dia TEXT PRIMARY KEY, buff TEXT NOT NULL, deb
 CREATE TABLE IF NOT EXISTS pastas (caminho TEXT PRIMARY KEY, modo TEXT NOT NULL, criada REAL NOT NULL, expira REAL);
 CREATE TABLE IF NOT EXISTS pedidos_pasta (id INTEGER PRIMARY KEY, caminho TEXT NOT NULL, ts REAL NOT NULL,
   estado TEXT NOT NULL DEFAULT 'pendente', motivo TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS perfil (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ocupacao TEXT NOT NULL DEFAULT '', objetivos TEXT NOT NULL DEFAULT '',
+  altura_cm INTEGER NOT NULL DEFAULT 0, peso_kg REAL NOT NULL DEFAULT 0,
+  treina INTEGER NOT NULL DEFAULT 0, treino_tipo TEXT NOT NULL DEFAULT '', treino_freq TEXT NOT NULL DEFAULT '',
+  tempo_estudo TEXT NOT NULL DEFAULT '', atencao TEXT NOT NULL DEFAULT '',
+  estilo_estudo TEXT NOT NULL DEFAULT '', rotina TEXT NOT NULL DEFAULT '',
+  estilo_vida TEXT NOT NULL DEFAULT '', sono TEXT NOT NULL DEFAULT '',
+  obstaculos TEXT NOT NULL DEFAULT '', tamanho_bloco TEXT NOT NULL DEFAULT '',
+  relatorio TEXT NOT NULL DEFAULT '', atualizado REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS pericias (
+  id INTEGER PRIMARY KEY, nome TEXT NOT NULL UNIQUE,
+  xp INTEGER NOT NULL DEFAULT 0, nivel INTEGER NOT NULL DEFAULT 1,
+  estado TEXT NOT NULL DEFAULT 'aprovada', origem TEXT NOT NULL DEFAULT 'jogador',
+  criada REAL NOT NULL
+);
 """
 
 
@@ -118,6 +138,18 @@ class Banco:
                 self.c.execute("ALTER TABLE quests ADD COLUMN prio INTEGER NOT NULL DEFAULT 2")
             if "depende_de" not in cols:
                 self.c.execute("ALTER TABLE quests ADD COLUMN depende_de TEXT NOT NULL DEFAULT '[]'")
+            if "pericias" not in cols:
+                self.c.execute("ALTER TABLE quests ADD COLUMN pericias TEXT NOT NULL DEFAULT '[]'")
+            hcols = {r[1] for r in self.c.execute("PRAGMA table_info(heroi)").fetchall()}
+            for hc in ("attr_for", "attr_agi", "attr_vig", "attr_int", "attr_con", "attr_pre"):
+                if hc not in hcols:
+                    self.c.execute(f"ALTER TABLE heroi ADD COLUMN {hc} INTEGER NOT NULL DEFAULT 1")
+            if "pontos_attr" not in hcols:
+                self.c.execute("ALTER TABLE heroi ADD COLUMN pontos_attr INTEGER NOT NULL DEFAULT 0")
+            pcols = {r[1] for r in self.c.execute("PRAGMA table_info(perfil)").fetchall()}
+            for pc in ("estilo_vida", "sono", "obstaculos", "tamanho_bloco"):
+                if pc not in pcols:
+                    self.c.execute(f"ALTER TABLE perfil ADD COLUMN {pc} TEXT NOT NULL DEFAULT ''")
             if self.meta("versao") is None:
                 self.definir_meta("versao", str(VERSAO))
             self.c.execute("INSERT OR IGNORE INTO atual (id) VALUES (1)")

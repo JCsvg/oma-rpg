@@ -187,8 +187,94 @@ class Jogo:
     def _efeito(self, tipo: str, valor: float, origem: str) -> None:
         self.b.x("INSERT INTO efeitos (tipo, valor, origem, criado) VALUES (?,?,?,?)", (tipo, valor, origem, self.agora()))
 
+    @staticmethod
+    def calcular_iniciais_perfil(p: dict) -> tuple[dict[str, int], list[str], str]:
+        """Calcula atributos iniciais (1..6), perícias iniciais e um relatório legível a partir do questionário."""
+        attrs = {"for": 1, "agi": 1, "vig": 1, "int": 1, "con": 1, "pre": 1}
+        treina = bool(p.get("treina"))
+        freq = str(p.get("treino_freq") or "").lower()
+        tipo_t = str(p.get("treino_tipo") or "").lower()
+        if treina:
+            if any(x in freq for x in ("2x", "todo", "diar", "6", "7", "5")):
+                attrs["for"] += 2
+                attrs["vig"] += 2
+                attrs["agi"] += 1
+            elif any(x in freq for x in ("3", "4")):
+                attrs["for"] += 1
+                attrs["vig"] += 1
+            else:
+                attrs["vig"] += 1
+            if any(x in tipo_t for x in ("corrida", "luta", "boxe", "muay", "futebol", "natação", "natacao", "ciclismo", "cardio")):
+                attrs["agi"] += 1
+            if any(x in tipo_t for x in ("muscul", "academia", "peso", "calistenia", "cross")):
+                attrs["for"] += 1
+        try:
+            alt = int(p.get("altura_cm") or 0)
+            peso = float(p.get("peso_kg") or 0)
+            if 100 <= alt <= 230 and 35 <= peso <= 200:
+                imc = peso / ((alt / 100) ** 2)
+                if 18.5 <= imc <= 25.5:
+                    attrs["vig"] += 1
+                if treina and peso >= 75:
+                    attrs["for"] += 1
+        except (ValueError, TypeError):
+            pass
+        estudo = str(p.get("tempo_estudo") or "").lower()
+        if any(x in estudo for x in ("4", "5", "6", "7", "8", "3")):
+            attrs["int"] += 2
+            attrs["con"] += 1
+        elif any(x in estudo for x in ("1", "2")):
+            attrs["int"] += 1
+        atencao = str(p.get("atencao") or "").lower()
+        if any(x in atencao for x in ("tdah", "dificil", "difícil", "distra", "baixa", "sim")):
+            attrs["agi"] += 1
+        elif any(x in atencao for x in ("alta", "boa", "foco")):
+            attrs["con"] += 2
+        tudo = " ".join(str(p.get(k) or "") for k in ("ocupacao", "objetivos", "estilo_estudo", "treino_tipo")).lower()
+        pericias: list[str] = []
+        bruto_p = p.get("pericias_iniciais") or ""
+        for item in str(bruto_p).split(","):
+            nome = item.strip()[:30]
+            if nome and nome not in pericias:
+                pericias.append(nome)
+        mapa = (
+            (("program", "código", "codigo", "python", "dev", "comput", "software", "tcc"), ("Programação", "int")),
+            (("teoria", "algorit", "comp", "matem", "cálculo", "calculo", "lógica", "logica"), ("Raciocínio Lógico", "int")),
+            (("inglês", "ingles", "idioma", "língua", "lingua", "espanhol"), ("Inglês", "pre")),
+            (("game", "jogo", "rpg", "godot", "unity"), ("Game Design", "int")),
+            (("escrev", "escrita", "redação", "artigo", "tcc", "texto"), ("Escrita", "pre")),
+            (("apresenta", "falar", "palestra", "reunião", "oratória"), ("Comunicação", "pre")),
+            (("design", "ui", "ux", "arte", "desenho"), ("Design", "con")),
+        )
+        for chaves, (per, attr_b) in mapa:
+            if any(c in tudo for c in chaves):
+                if per not in pericias:
+                    pericias.append(per)
+                attrs[attr_b] = min(6, attrs[attr_b] + 1)
+        if treina and "Atletismo" not in pericias and "Musculação" not in pericias:
+            pericias.append("Musculação" if "muscul" in tipo_t or "academia" in tipo_t else "Atletismo")
+        vida = str(p.get("estilo_vida") or "").lower()
+        if any(x in vida for x in ("muito", "ativo", "intenso")):
+            attrs["vig"] += 1
+            attrs["agi"] += 1
+        sono = str(p.get("sono") or "").lower()
+        if any(x in sono for x in ("7", "8", "9", "bom", "regular")):
+            attrs["con"] += 1
+        for k in attrs:
+            attrs[k] = max(1, min(6, attrs[k]))
+        partes = [
+            f"Ocupação: {p.get('ocupacao') or '-'}",
+            f"Objetivos: {p.get('objetivos') or '-'}",
+            f"Físico: {p.get('altura_cm') or '-'} cm, {p.get('peso_kg') or '-'} kg · Estilo de vida: {p.get('estilo_vida') or '-'} · Sono: {p.get('sono') or '-'}",
+            "Treino: " + (f"{p.get('treino_tipo') or 'sim'} ({p.get('treino_freq') or 'regular'})" if treina else "não"),
+            f"Estudo: {p.get('tempo_estudo') or '-'}/dia · Blocos: {p.get('tamanho_bloco') or '-'} · Estilo: {p.get('estilo_estudo') or '-'}",
+            f"Atenção/foco: {p.get('atencao') or '-'} · Travas: {p.get('obstaculos') or '-'}",
+            f"Rotina: {p.get('rotina') or '-'}",
+        ]
+        return attrs, pericias[:8], "\n".join(partes)
+
     # ------------------------------------------------------------ herói
-    def criar_heroi(self, nome, classe) -> dict:
+    def criar_heroi(self, nome, classe, perfil: dict | None = None) -> dict:
         nome = texto(nome, "nome", 24, obrigatorio=True)
         if classe not in self.cfg["classes"]:
             raise ErroJogo("classe desconhecida")
@@ -196,14 +282,109 @@ class Jogo:
             raise ErroJogo("o herói já existe")
         cls = self.cfg["classes"][classe]
         agora = self.agora()
+        attrs = {"for": 1, "agi": 1, "vig": 1, "int": 1, "con": 1, "pre": 1}
+        per_ini: list[str] = []
+        relatorio = ""
+        if isinstance(perfil, dict) and perfil:
+            attrs, per_ini, relatorio = self.calcular_iniciais_perfil(perfil)
+        bonus = regras.bonus_atributos(attrs)
+        hp_ini = int(cls["hp"] + bonus["hp_max"])
+        mp_ini = int(cls["mp"] + bonus["mp_max"])
         with self.b.transacao():
-            self.b.x("INSERT INTO heroi (id, nome, classe, hp, mp, criado) VALUES (1, ?, ?, ?, ?, ?)",
-                     (nome, classe, cls["hp"], cls["mp"], agora))
+            self.b.x("INSERT INTO heroi (id, nome, classe, hp, mp, criado, attr_for, attr_agi, attr_vig, attr_int, "
+                     "attr_con, attr_pre) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     (nome, classe, hp_ini, mp_ini, agora, attrs["for"], attrs["agi"], attrs["vig"],
+                      attrs["int"], attrs["con"], attrs["pre"]))
             self.b.x("INSERT OR IGNORE INTO posses (item, em) VALUES ('tema_verde', ?)", (agora,))
             self.b.definir_meta("dia", self.hoje())
+            if isinstance(perfil, dict) and perfil:
+                self._gravar_perfil(perfil, relatorio, agora)
+            for pnome in per_ini:
+                self.b.x("INSERT OR IGNORE INTO pericias (nome, xp, nivel, estado, origem, criada) "
+                         "VALUES (?, 0, 1, 'aprovada', 'perfil', ?)", (pnome, agora))
         self._registro("heroi", f"{nome} entrou como {cls['nome']}")
         self.emitir({"evento": "heroi"})
-        return {"nome": nome, "classe": classe}
+        return {"nome": nome, "classe": classe, "atributos": attrs, "pericias": per_ini}
+
+    def _gravar_perfil(self, p: dict, relatorio: str, agora: float) -> None:
+        self.b.x("INSERT INTO perfil (id, ocupacao, objetivos, altura_cm, peso_kg, treina, treino_tipo, treino_freq, "
+                 "tempo_estudo, atencao, estilo_estudo, rotina, estilo_vida, sono, obstaculos, tamanho_bloco, relatorio, atualizado) "
+                 "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                 "ON CONFLICT(id) DO UPDATE SET ocupacao=excluded.ocupacao, objetivos=excluded.objetivos, "
+                 "altura_cm=excluded.altura_cm, peso_kg=excluded.peso_kg, treina=excluded.treina, "
+                 "treino_tipo=excluded.treino_tipo, treino_freq=excluded.treino_freq, "
+                 "tempo_estudo=excluded.tempo_estudo, atencao=excluded.atencao, "
+                 "estilo_estudo=excluded.estilo_estudo, rotina=excluded.rotina, "
+                 "estilo_vida=excluded.estilo_vida, sono=excluded.sono, "
+                 "obstaculos=excluded.obstaculos, tamanho_bloco=excluded.tamanho_bloco, "
+                 "relatorio=excluded.relatorio, atualizado=excluded.atualizado",
+                 (texto(p.get("ocupacao"), "ocupação", 120), texto(p.get("objetivos"), "objetivos", 300),
+                  int(p.get("altura_cm") or 0), float(p.get("peso_kg") or 0), 1 if p.get("treina") else 0,
+                  texto(p.get("treino_tipo"), "tipo de treino", 120), texto(p.get("treino_freq"), "frequência de treino", 60),
+                  texto(p.get("tempo_estudo"), "tempo de estudo", 60), texto(p.get("atencao"), "atenção", 120),
+                  texto(p.get("estilo_estudo"), "estilo de estudo", 180), texto(p.get("rotina"), "rotina", 180),
+                  texto(p.get("estilo_vida"), "estilo de vida", 80), texto(p.get("sono"), "sono", 60),
+                  texto(p.get("obstaculos"), "obstáculos", 180), texto(p.get("tamanho_bloco"), "tamanho de bloco", 80),
+                  relatorio, agora))
+
+    def salvar_perfil(self, **a) -> dict:
+        self._h()
+        _, _, relatorio = self.calcular_iniciais_perfil(a)
+        agora = self.agora()
+        with self.b.transacao():
+            self._gravar_perfil(a, relatorio, agora)
+        self.emitir({"evento": "perfil"})
+        return C.perfil(self.b)
+
+    def gastar_atributo(self, attr=None) -> dict:
+        h = self._h()
+        chave = str(attr or "").strip().lower()
+        validos = {k for k, *_ in regras.ATRIBUTOS}
+        if chave not in validos:
+            raise ErroJogo("atributo desconhecido")
+        if int(h["pontos_attr"] or 0) <= 0:
+            raise ErroJogo("sem pontos de atributo disponíveis")
+        col = f"attr_{chave}"
+        novo = int(h[col]) + 1
+        with self.b.transacao():
+            self.b.x(f"UPDATE heroi SET {col} = ?, pontos_attr = pontos_attr - 1 WHERE id = 1", (novo,))
+            if chave == "vig":
+                self._ganho("atributo", "Vigor subiu (+4 HP máx)", hp=4)
+            elif chave == "con":
+                self._ganho("atributo", "Consciência subiu (+2 MP máx)", mp=2)
+            else:
+                self._registro("atributo", f"{regras.ATTR_SIGLAS[chave]} subiu para {novo}")
+        self.emitir({"evento": "atributo", "attr": chave, "valor": novo})
+        return {"attr": chave, "valor": novo}
+
+    def nova_pericia(self, nome=None, estado: str = "aprovada", origem: str = "jogador") -> dict:
+        self._h()
+        n = texto(nome, "perícia", 40, obrigatorio=True)
+        ex = self.b.um("SELECT * FROM pericias WHERE lower(nome) = lower(?)", (n,))
+        if ex is not None:
+            return dict(ex)
+        cur = self.b.x("INSERT INTO pericias (nome, xp, nivel, estado, origem, criada) VALUES (?, 0, 1, ?, ?, ?)",
+                       (n, estado, origem, self.agora()))
+        self.emitir({"evento": "pericia", "id": cur.lastrowid})
+        return {"id": cur.lastrowid, "nome": n, "estado": estado}
+
+    def aprovar_pericia(self, id=None) -> dict:
+        pid = inteiro(id, "id", 1, 10**9)
+        p = self.b.um("SELECT * FROM pericias WHERE id = ?", (pid,))
+        if p is None:
+            raise ErroJogo("perícia não encontrada")
+        self.b.x("UPDATE pericias SET estado = 'aprovada' WHERE id = ?", (pid,))
+        self.emitir({"evento": "pericia", "id": pid})
+        return {"id": pid, "nome": p["nome"], "estado": "aprovada"}
+
+    def remover_pericia(self, id=None) -> dict:
+        pid = inteiro(id, "id", 1, 10**9)
+        p = self.b.um("SELECT * FROM pericias WHERE id = ?", (pid,))
+        if p is None:
+            raise ErroJogo("perícia não encontrada")
+        self.b.x("DELETE FROM pericias WHERE id = ?", (pid,))
+        self.emitir({"evento": "pericia", "id": pid})
+        return {"id": pid}
 
     def trocar_classe(self, classe) -> dict:
         h = self._h()
@@ -243,14 +424,15 @@ class Jogo:
                 return
             antes = C.titulo_classe(self.cfg, h)
             novo = h["nivel"] + 1
-            self.b.x("UPDATE heroi SET nivel = ?, xp = xp - ?, pontos = pontos + ? WHERE id = 1",
-                     (novo, precisa, self._cfg("heroi", "pontos_nivel")))
+            pa = int(self.cfg["heroi"].get("pontos_attr_nivel", 2))
+            self.b.x("UPDATE heroi SET nivel = ?, xp = xp - ?, pontos = pontos + ?, pontos_attr = pontos_attr + ? WHERE id = 1",
+                     (novo, precisa, self._cfg("heroi", "pontos_nivel"), pa))
             hd = self.cfg["heroi"]
             self._ganho("nivel", f"nível {novo} alcançado", bits=hd["bits_nivel"], hp=hd["hp_nivel"], ts=ts)
             depois = C.titulo_classe(self.cfg, self._h())
             self.emitir({"evento": "nivel", "nivel": novo, "titulo": depois if depois != antes else "",
-                         "pontos": hd["pontos_nivel"], "hp": hd["hp_nivel"], "bits": hd["bits_nivel"]})
-            self.notificar(f"Nível {novo}", f"+1 ponto de skill · +{hd['hp_nivel']} de HP · +{hd['bits_nivel']} bits")
+                         "pontos": hd["pontos_nivel"], "pontos_attr": pa, "hp": hd["hp_nivel"], "bits": hd["bits_nivel"]})
+            self.notificar(f"Nível {novo}", f"+1 skill · +{pa} atributos · +{hd['hp_nivel']} HP · +{hd['bits_nivel']} bits")
 
     def _perder_hp(self, valor: int, origem: str, texto_: str, ts: float | None = None) -> int:
         valor = int(valor)
@@ -710,6 +892,13 @@ class Jogo:
             if not isinstance(deps, list) or len(deps) > 8:
                 raise ErroJogo("depende_de: lista de até 8 ids")
             f["depende_de"] = json.dumps([inteiro(d, "depende_de", 1, 10**9) for d in deps])
+        if not parcial or "pericias" in a:
+            pers = a.get("pericias", [])
+            if isinstance(pers, str):
+                pers = [x.strip() for x in pers.split(",") if x.strip()]
+            if not isinstance(pers, list) or len(pers) > 6:
+                raise ErroJogo("pericias: lista de até 6")
+            f["pericias"] = json.dumps([texto(p, "perícia", 40, obrigatorio=True) for p in pers], ensure_ascii=False)
         if "tipo" in a:
             if a["tipo"] not in ("normal", "daily"):
                 raise ErroJogo("tipo: normal ou daily")
@@ -744,6 +933,19 @@ class Jogo:
         return {"id": qid, "titulo": q["titulo"], "estado": q["estado"], "xp_previsto": xp,
                 "bits_previstos": regras.bits_de(xp, self.cfg)}
 
+    def _registrar_pericias_quest(self, pers_json: str, estado: str, origem: str) -> None:
+        try:
+            nomes = json.loads(pers_json or "[]")
+        except ValueError:
+            return
+        for nome in nomes:
+            ex = self.b.um("SELECT id, estado FROM pericias WHERE lower(nome) = lower(?)", (nome,))
+            if ex is None:
+                self.b.x("INSERT INTO pericias (nome, xp, nivel, estado, origem, criada) VALUES (?, 0, 1, ?, ?, ?)",
+                         (nome, estado, origem, self.agora()))
+            elif estado == "aprovada" and ex["estado"] != "aprovada":
+                self.b.x("UPDATE pericias SET estado = 'aprovada' WHERE id = ?", (ex["id"],))
+
     def nova_quest(self, **a) -> dict:
         self._h()
         f = self._campos_quest(a, parcial=False)
@@ -752,12 +954,13 @@ class Jogo:
         hoje = 1 if a.get("hoje", True) else 0
         with self.b.transacao():
             arco = self._arco_id(f["arco_nome"])
-            cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, arco_id, arco_nome, prazo, tipo, "
-                           "estado, origem, porque, ordem, hoje, subtarefas, criada, aprovada) "
-                           "VALUES (?,?,?,?,?,?,?,?,?,?,'aberta','jogador',?,?,?,?,?,?)",
-                           (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], arco, f["arco_nome"],
-                            f["prazo"], f["tipo"], f["porque"], self._proxima_ordem(), hoje, f["subtarefas"],
-                            self.agora(), self.agora()))
+            cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, pericias, arco_id, arco_nome, "
+                           "prazo, tipo, estado, origem, porque, ordem, hoje, subtarefas, criada, aprovada) "
+                           "VALUES (?,?,?,?,?,?,?,?,?,?,?,'aberta','jogador',?,?,?,?,?,?)",
+                           (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], f["pericias"],
+                            arco, f["arco_nome"], f["prazo"], f["tipo"], f["porque"], self._proxima_ordem(), hoje,
+                            f["subtarefas"], self.agora(), self.agora()))
+            self._registrar_pericias_quest(f["pericias"], "aprovada", "jogador")
         self.emitir({"evento": "quest", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
@@ -788,10 +991,13 @@ class Jogo:
             ini = C.inicio_do_dia(self.hoje())
             if int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE origem = 'mestre' AND criada >= ?", (ini,), 0)) >= maximo:
                 raise ErroJogo(f"limite de {maximo} rascunhos por dia")
-        cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, arco_nome, prazo, tipo, estado, "
-                       "origem, porque, subtarefas, ordem, criada) VALUES (?,?,?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?,?)",
-                       (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], f["arco_nome"],
-                        f["prazo"], f["porque"], subs, self._proxima_ordem(), self.agora()))
+        with self.b.transacao():
+            cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, pericias, arco_nome, prazo, tipo, "
+                           "estado, origem, porque, subtarefas, ordem, criada) "
+                           "VALUES (?,?,?,?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?,?)",
+                           (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], f["pericias"],
+                            f["arco_nome"], f["prazo"], f["porque"], subs, self._proxima_ordem(), self.agora()))
+            self._registrar_pericias_quest(f["pericias"], "sugerida", "mestre")
         self.emitir({"evento": "rascunho", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
@@ -846,6 +1052,8 @@ class Jogo:
             arco = self._arco_id(q["arco_nome"])
             self.b.x("UPDATE quests SET estado = 'aberta', arco_id = ?, aprovada = ?, hoje = 1 WHERE id = ?",
                      (arco, self.agora(), qid))
+            if "pericias" in q.keys():
+                self._registrar_pericias_quest(q["pericias"], "aprovada", "mestre")
         self._registro("aprovar", f"aprovou o rascunho #{qid}: {q['titulo']}")
         self.emitir({"evento": "quest", "id": qid})
         return self._resumo_quest(qid)
@@ -894,23 +1102,48 @@ class Jogo:
         feitos = C.quest_feitos(self.b, q["id"], dia if daily else None)
         h = self._h()
         P = C.passivos(self.b, self.cfg, dia, h)
-        xp = regras.xp_quest_concluida(q["est"], q["dif"], feitos, self.cfg, P["xp_quest"])
+        extra_foco = P["xp_quest_foco"] if feitos > 0 else 0.0
+        extra_skill = self._consumir("proxima_quest_xp")
+        foco_per = self._consumir("foco_pericia")
+        xp = regras.xp_quest_concluida(q["est"], q["dif"], feitos, self.cfg,
+                                       P["xp_quest"] + extra_foco + extra_skill, P["xp_confirmacao"])
+        critico = P["critico_pct"] > 0 and (self.rng.random() * 100 < P["critico_pct"])
+        if critico:
+            xp = regras.arred(xp * 1.5)
         bits = regras.bits_de(xp, self.cfg, P["bits"])
+        cura_q = int(P["cura_quest"])
         with self.b.transacao():
             if daily:
                 self.b.x("UPDATE quests SET daily_feita = ?, nota = ? WHERE id = ?", (dia, nota, q["id"]))
             else:
                 self.b.x("UPDATE quests SET estado = 'feita', concluida = ?, nota = ?, xp_ganho = ? WHERE id = ?",
                          (ts, nota, xp, q["id"]))
-            if xp > 0:
-                self._ganho("quest", f"quest: {q['titulo']}", xp=xp, bits=bits, ref=q["id"], ts=ts)
-            else:
-                self._registro("quest", f"quest sem pomodoro: {q['titulo']} (0 xp)", ts)
+            rot = f"quest confirmada: {q['titulo']}" if feitos == 0 else f"quest: {q['titulo']}"
+            if critico:
+                rot += " (crítico!)"
+            self._ganho("quest", rot, xp=xp, bits=bits, hp=cura_q, ref=q["id"], ts=ts)
+            self._ganhar_xp_pericias(q, xp, P["xp_pericia"] + extra_skill + foco_per)
         cheio = feitos >= regras.xp_cheio_minimo(q["est"], self.cfg)
         self.emitir({"evento": "quest_feita", "id": q["id"], "titulo": q["titulo"], "xp": xp, "bits": bits, "cheio": cheio})
         if not daily and q["arco_id"]:
             self._verificar_chefe(q["arco_id"], ts)
         return {"id": q["id"], "xp": xp, "bits": bits, "feitos": feitos, "cheio": cheio}
+
+    def _ganhar_xp_pericias(self, q, xp_quest: int, bonus_pct: float) -> None:
+        nomes = C.pericias_quest(q)
+        if not nomes or xp_quest <= 0:
+            return
+        por_p = max(10, regras.arred((xp_quest / len(nomes)) * (1 + bonus_pct / 100)))
+        for nome in nomes:
+            r = self.b.um("SELECT * FROM pericias WHERE lower(nome) = lower(?) AND estado = 'aprovada'", (nome,))
+            if r is None:
+                continue
+            novo_xp = int(r["xp"]) + por_p
+            nv = int(r["nivel"])
+            while novo_xp >= regras.xp_pericia_nivel(nv, self.cfg):
+                novo_xp -= regras.xp_pericia_nivel(nv, self.cfg)
+                nv += 1
+            self.b.x("UPDATE pericias SET xp = ?, nivel = ? WHERE id = ?", (novo_xp, nv, r["id"]))
 
     def _verificar_chefe(self, arco_id: int, ts: float) -> None:
         arco = self.b.um("SELECT * FROM arcos WHERE id = ?", (arco_id,))
@@ -1112,11 +1345,17 @@ class Jogo:
                 self.b.x("UPDATE heroi SET ultima_perda = 0 WHERE id = 1")
                 msg = f"+{hp} de HP de volta"
             elif ef == "cura":
-                hp = int(valor)
+                hp = int(valor + P["cura_extra"])
                 msg = "HP recuperado"
             elif ef == "mana_hp":
-                hp = int(valor)
+                hp = int(valor + P["cura_extra"])
                 msg = f"{custo} de mana viraram {hp} de HP"
+            elif ef == "proxima_quest_xp":
+                self._efeito("proxima_quest_xp", float(valor), skill)
+                msg = f"a próxima quest vale +{valor}% XP"
+            elif ef == "foco_pericia":
+                self._efeito("foco_pericia", float(valor), skill)
+                msg = f"perícias da próxima quest valem +{valor}% XP"
             elif ef == "descartar":
                 self.b.x("UPDATE quests SET daily_livre = ? WHERE id = ?", (dia, pendente["id"]))
                 msg = f"daily dispensada hoje: {pendente['titulo']}"
@@ -1162,7 +1401,9 @@ class Jogo:
             qtd = 1
             if item in C.posses(self.b):
                 raise ErroJogo("você já tem esse item")
-        preco = int(it["preco"]) * qtd
+        P = self.P(h)
+        desc_pct = min(50.0, P["desconto_loja"])
+        preco = max(0, regras.arred(int(it["preco"]) * qtd * (1 - desc_pct / 100))) if desc_pct else int(it["preco"]) * qtd
         if h["bits"] < preco:
             raise ErroJogo(f"faltam {preco - h['bits']} bits")
         with self.b.transacao():

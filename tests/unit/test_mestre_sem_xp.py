@@ -107,12 +107,14 @@ def test_xp_so_entra_por_pomodoro_e_commit(heroi):
     for cmd, a in [("aprender", {"skill": "git_stash"}), ("aprender", {"skill": "hotfix"}), ("usar_skill", {"skill": "hotfix"}),
                    ("comprar", {"item": "cafe"}), ("usar_item", {"item": "cafe"}), ("comprar", {"item": "titulo_cafe"}),
                    ("equipar", {"item": "titulo_cafe"}), ("marcar_hoje", {"id": q["id"]}), ("novo_arco", {"nome": "Arco"}),
-                   ("nota", {"texto": "anotação"}), ("concluir_quest", {"id": q["id"]})]:
+                   ("nota", {"texto": "anotação"})]:
         executar(j, cmd, a, "jogador")
     assert j.heroi()["xp_total"] == 0
+    executar(j, "concluir_quest", {"id": q["id"]}, "jogador")
+    assert j.heroi()["xp_total"] == 5
     pomodoro(j)
-    assert j.heroi()["xp_total"] > 0
-    assert {r[0] for r in j.b.todos("SELECT DISTINCT origem FROM ganhos WHERE xp > 0")} == {"pomodoro"}
+    assert j.heroi()["xp_total"] > 5
+    assert {r[0] for r in j.b.todos("SELECT DISTINCT origem FROM ganhos WHERE xp > 0")} == {"quest", "pomodoro"}
 
 
 def test_commit_com_coautor_claude_nao_da_xp(heroi):
