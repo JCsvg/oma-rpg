@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=oma-rpg
+GenericName=RPG de estudo
+Comment=Pomodoro, quests, nível, vida e mana num terminal
+Exec=xdg-terminal-exec --app-id=TUI.tile -e oma-rpg
+Terminal=false
+Icon=applications-games
+Categories=Education;Game;RolePlaying;ConsoleOnly;
+Keywords=pomodoro;estudo;rpg;quests;foco;
+StartupNotify=true

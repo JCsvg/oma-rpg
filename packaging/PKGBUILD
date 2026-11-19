@@ -1,0 +1,49 @@
+# Maintainer: JCsvg
+#
+# Pacote local, construído a partir de um tarball gerado por `git archive`
+# (ver packaging/empacotar.sh). Só depende de python e python-textual (repositório extra);
+# nada do AUR, nada vendorizado. Banco, socket, git e inotify usam a biblioteca padrão.
+
+pkgname=oma-rpg
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="RPG de estudo em TUI no modelo do herdr: pomodoro, quests, nível, vida, mana, classes e skills, com serviço em segundo plano"
+arch=('any')
+url="https://github.com/JCsvg/oma-rpg"
+license=('MIT')
+depends=(
+  'python>=3.13'
+  'python-textual>=8'
+)
+optdepends=(
+  'git: observar os repositórios registrados (commit vale XP)'
+  'libnotify: notify-send, para avisar o fim do pomodoro e da pausa pelo mako'
+  'claude-code: o Mestre da taverna (o agente do Omarchy)'
+  'xdg-terminal-exec: abrir pelo menu de aplicativos'
+)
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling')
+checkdepends=('python-pytest' 'python-pytest-asyncio')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')  # tarball local; o empacotar.sh imprime o hash real
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  # Só os unitários: os de integração sobem o serviço, repositórios git e a interface, e demoram.
+  PYTHONPATH=src:. python -m pytest -q tests/unit -p no:warnings -p no:cacheprovider
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 packaging/oma-rpg.service "$pkgdir/usr/lib/systemd/user/oma-rpg.service"
+  install -Dm644 packaging/oma-rpg.desktop "$pkgdir/usr/share/applications/oma-rpg.desktop"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 DECISOES.md "$pkgdir/usr/share/doc/$pkgname/DECISOES.md"
+  install -Dm644 skill/oma-rpg/SKILL.md "$pkgdir/usr/share/doc/$pkgname/skill/SKILL.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

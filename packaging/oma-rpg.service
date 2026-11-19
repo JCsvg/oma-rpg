@@ -1,0 +1,17 @@
+[Unit]
+Description=oma-rpg: guarda o timer do pomodoro e observa os repositórios git registrados
+Documentation=file:///usr/share/doc/oma-rpg/README.md
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/oma-rpg servico
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+# log baixo: só avisos, sem título de quest, nota ou mensagem da taverna
+Environment=OMA_RPG_LOG=WARNING
+
+[Install]
+WantedBy=graphical-session.target
