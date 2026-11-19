@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oma-rpg"
+version = "0.1.0"
+description = "RPG de estudo em TUI no modelo do herdr: pomodoro, quests, nível, vida, mana, classes e skills, com serviço em segundo plano"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "JCsvg" }]
+dependencies = ["textual>=8.0,<9"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+oma-rpg = "oma_rpg.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oma_rpg"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src", "."]

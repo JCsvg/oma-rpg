@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+*.Identifier
+packaging/*.tar.gz
+packaging/*.pkg.tar.*
+packaging/src/
+packaging/pkg/
+uv.lock
+# memória local do Claude e material de design: não vão ao GitHub
+.context/
+.design/
+CLAUDE.md
