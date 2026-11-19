@@ -157,6 +157,8 @@ def _campos(a, parcial: bool) -> dict:
         d["porque"] = a.desc
     if getattr(a, "depende_de", None) is not None:
         d["depende_de"] = a.depende_de
+    if getattr(a, "pericias", None) is not None:
+        d["pericias"] = a.pericias
     return d
 
 
@@ -300,6 +302,7 @@ def _parser_sub() -> argparse.ArgumentParser:
         d.add_argument("--desc", help="como resolver a tarefa (passo a passo)")
         d.add_argument("--porque", help="atalho antigo para --desc")
         d.add_argument("--depende-de", dest="depende_de", help="IDs de pré-requisitos separados por vírgula (ex: 18,19)")
+        d.add_argument("--pericias", help="perícias treinadas separadas por vírgula (ex: Programação,Inglês)")
         d.add_argument("--json", action="store_true")
         d.set_defaults(f=cmd_draft)
     e = sub.add_parser("editar", help="edita um rascunho ainda não aprovado")
@@ -314,6 +317,7 @@ def _parser_sub() -> argparse.ArgumentParser:
     e.add_argument("--desc")
     e.add_argument("--porque")
     e.add_argument("--depende-de", dest="depende_de")
+    e.add_argument("--pericias")
     e.add_argument("--json", action="store_true")
     e.set_defaults(f=cmd_editar)
     ps = sub.add_parser("pastas", help="as pastas que o JC liberou para o Mestre ler")
