@@ -31,6 +31,7 @@ class Lateral(Vertical):
         yield Pintado(self._cab_paineis, id="cab-paineis")
         yield Lista(self._linha_painel, id="lista-paineis", fundo_cursor=True)
         yield Pintado(self._heroi, id="lateral-heroi")
+        yield Pintado(self._proximas, id="lateral-proximas")
         yield Static("", classes="espaco")
         yield Pintado(self._ativos, id="lateral-ativos", ao_clicar=self._clique_ativos)
 
@@ -88,6 +89,23 @@ class Lateral(Vertical):
         if st["pontos"]:
             linhas.append(Text.assemble((ic("estrela4") + " ", a.cor("yellow")),
                                         (f"{st['pontos']} ponto{'s' if st['pontos'] != 1 else ''} de skill", a.cor("yellow"))))
+        return D.juntar(linhas)
+
+    def _proximas(self, w: int) -> Text:
+        a = self.app
+        abertas = [q for q in C.quests(a.b, a.cfg, a.hoje(), "aberta") if not q.get("bloqueada")]
+        linhas = [Text("─" * w, style=a.cor("linha")),
+                  D.linha_lr(Text("faltam", style=a.cor("mudo")), Text(str(len(abertas)), style=a.cor("mudo")), w)]
+        if not abertas:
+            linhas.append(Text("nenhuma quest aberta", style=a.cor("mudo")))
+            return D.juntar(linhas)
+        for q in abertas[:4]:
+            p = q.get("prio", 2)
+            marca, cor = {3: ("! ", "red"), 2: ("· ", "accent"), 1: ("⌄ ", "mudo")}.get(p, ("· ", "mudo"))
+            t = Text(marca, style=f"bold {a.cor(cor)}" if p == 3 else a.cor(cor))
+            t.append(q["titulo"], style=a.cor("texto"))
+            t.truncate(w, overflow="ellipsis")
+            linhas.append(t)
         return D.juntar(linhas)
 
     def _ativos(self, w: int) -> Text:

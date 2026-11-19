@@ -63,7 +63,7 @@ class JanelaConversa(Janela):
 
     def pintar(self) -> None:
         a = self.app
-        self.titulo(f"{ic('mestre')} taverna", f"Mestre · {a.mestre_rotulo()}")
+        self.titulo(f"{ic('mestre')} taverna", f"Mestre · {a.mestre_rotulo()} · P pastas · M agente")
         rows = a.b.todos("SELECT * FROM taverna ORDER BY ts, id")
         itens: list = []
         for r in rows[-200:]:
@@ -161,8 +161,8 @@ class JanelaConversa(Janela):
 
 class JanelaRascunhosT(Janela):
     NOME = "rascunhos-t"
-    DEFAULT_CSS = "JanelaRascunhosT { height: 24; } JanelaRascunhosT Lista { margin-top: 1; height: 1fr; } " \
-                  "JanelaRascunhosT #rt-pe { height: 5; }"
+    DEFAULT_CSS = "JanelaRascunhosT { height: 18; } JanelaRascunhosT Lista { margin-top: 1; height: 1fr; } " \
+                  "JanelaRascunhosT #rt-pe { height: 3; }"
 
     def compose(self) -> ComposeResult:
         yield Lista(self._linha, altura=6, id="rt-lista", cursor_apagado=True)
@@ -192,8 +192,8 @@ class JanelaRascunhosT(Janela):
 
     def _pe(self, w: int) -> Text:
         a = self.app
-        return D.juntar([Text.assemble(("shift+a", a.cor("accent")), (" aprova todos", a.cor("mudo"))), Text(""),
-                         Text("nada vale XP até você aprovar", style=a.cor("mudo")), Text("o Mestre só cria rascunhos", style=a.cor("mudo"))])
+        return D.juntar([Text.assemble(("shift+a", a.cor("accent")), (" aprova todos  ·  ", a.cor("mudo")),
+                                       ("nada vale XP até aprovar", a.cor("mudo")))])
 
     def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
         ev.stop()
@@ -209,53 +209,50 @@ class JanelaRascunhosT(Janela):
         return [("a", "aprova o rascunho"), ("e ou enter", "edita e aprova"), ("d", "descarta"), ("shift+a", "aprova todos")]
 
 
-class JanelaPermissoes(Janela):
-    NOME = "permissoes"
-    FOCAVEL = True
-    DEFAULT_CSS = "JanelaPermissoes #perm-botoes { height: auto; margin-top: 1; } JanelaPermissoes Botao { margin-right: 1; }"
+class JanelaQuestsT(Janela):
+    NOME = "quests-t"
+    DEFAULT_CSS = "JanelaQuestsT { height: 1fr; } JanelaQuestsT Lista { margin-top: 1; height: 1fr; }"
 
     def compose(self) -> ComposeResult:
-        yield Pintado(self._desenhar)
-        with Horizontal(id="perm-botoes"):
-            yield Botao("P  pastas", id="b-pastas")
-            yield Botao("M  agente", id="b-agente")
+        yield Lista(self._linha, altura=2, id="qt-lista", cursor_sem_foco=True)
 
     def pintar(self) -> None:
-        self.titulo("o que o Mestre pode fazer", "P pastas · M agente")
-        self.query_one(Pintado).pintar()
+        a = self.app
+        qs = C.quests(a.b, a.cfg, a.hoje(), "aberta")
+        self.titulo(f"{ic('quests')} quests", f"{len(qs)} abertas")
+        self.query_one(Lista).definir(qs)
 
-    def on_botao_apertado(self, ev: Botao.Apertado) -> None:
-        ev.stop()
-        if ev.botao.id == "b-agente":
-            self.app.abrir_agente()
+    def _linha(self, q: dict, i: int, est) -> list[Text]:
+        a = self.app
+        p = q.get("prio", 2)
+        marca, cor = {3: ("! ", "red"), 2: ("· ", "accent"), 1: ("⌄ ", "mudo")}.get(p, ("· ", "mudo"))
+        t = Text()
+        t.append(f"#{q['id']:<3} ", style=a.cor("mudo"))
+        if q.get("bloqueada"):
+            t.append("🔒 ", style=a.cor("yellow"))
         else:
-            self.app.abrir_pastas()
+            t.append(marca, style=f"bold {a.cor(cor)}" if p == 3 else a.cor(cor))
+        t.append(q["titulo"], style=a.cor("mudo") if q.get("bloqueada") else f"bold {a.cor('forte')}")
+        dir_ = Text(f"{q['feitos']}/{q['est']}", style=a.cor("mudo"))
+        sub = Text(f"     depende de {', '.join('#' + str(d) for d in q['faltam_deps'])}" if q.get("bloqueada")
+                   else f"     {q['xp']} xp · {q['arco'] or q['materia'] or 'geral'}", style=a.cor("mudo"))
+        return [D.linha_lr(t, dir_, est.largura), sub]
+
+    def atual(self):
+        return self.query_one(Lista).item_atual()
+
+    def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
+        ev.stop()
+        q = self.atual()
+        if q:
+            from oma_rpg.ui.dialogos import EditarQuest
+            self.app.push_screen(EditarQuest(q))
 
     def rodape(self):
-        return [("P", "pastas", "noop"), ("M", "agente", "noop")]
+        return [("f", "focar", "noop"), ("espaço", "concluir", "noop"), ("enter", "editar", "noop")]
 
-    def _desenhar(self, w: int) -> Text:
-        a = self.app
-        linhas = [Text("")]
-        ps = C.pastas(a.b, a.agora())
-        n = len(ps)
-        for ok, verbo, txt in ((True, "agente", f"{a.mestre_rotulo()} (M muda)"),
-                               (True, "ler", "status, quests, histórico"), (True, "criar", "rascunhos de quest"),
-                               (True, "sugerir", "estimativas e prazos"),
-                               (bool(n), "pastas", f"{n} liberada{'s' if n != 1 else ''}, só leitura" if n else "nenhuma: P libera"),
-                               (False, "aprovar", "nunca: só você aprova"),
-                               (False, "concluir", "nunca: só pomodoro e commit"), (False, "mexer em XP", "nunca: tabela do jogo")):
-            linhas.append(Text.assemble(("✓ " if ok else "✗ ", a.cor("green") if ok else a.cor("red")),
-                                        (f"{verbo:<12}", f"bold {a.cor('forte')}"), (txt, a.cor("mudo"))))
-            if verbo == "pastas":
-                for p in ps[:4]:
-                    linhas.append(Text("  " + _curto(p["caminho"]) + (" (uma vez)" if p["modo"] == "uma_vez" else ""),
-                                       style=a.cor("texto"), no_wrap=True, overflow="ellipsis"))
-                if n > 4:
-                    linhas.append(Text(f"  e mais {n - 4}", style=a.cor("mudo")))
-            linhas.append(Text(""))
-        linhas.append(Text("contrato: oma-rpg --json (ver README)", style=a.cor("mudo")))
-        return D.juntar(linhas)
+    def teclas(self):
+        return [("f", "começa pomodoro na quest"), ("espaço", "conclui a quest"), ("enter", "edita")]
 
 
 class PaginaTaverna(Pagina):
@@ -264,19 +261,20 @@ class PaginaTaverna(Pagina):
     ENTRADA = "conversa"
     VIZINHAS = {
         "conversa": {"esq": "paineis", "dir": "rascunhos-t", "cima": "topo"},
-        "rascunhos-t": {"esq": "conversa", "cima": "topo", "baixo": "permissoes"},
-        "permissoes": {"esq": "conversa", "cima": "rascunhos-t"},
+        "rascunhos-t": {"esq": "conversa", "cima": "topo", "baixo": "quests-t"},
+        "quests-t": {"esq": "conversa", "cima": "rascunhos-t"},
     }
     BINDINGS = [Binding("a", "aprovar", show=False), Binding("e", "editar", show=False), Binding("d", "descartar", show=False),
                 Binding("A,shift+a", "aprovar_todos", show=False), Binding("P,shift+p", "pastas", show=False),
-                Binding("M,shift+m", "agente", show=False)]
-    DEFAULT_CSS = "PaginaTaverna JanelaConversa { width: 90; } PaginaTaverna #t-dir { width: 1fr; }"
+                Binding("M,shift+m", "agente", show=False), Binding("f", "focar_quest", show=False),
+                Binding("space", "concluir_quest", show=False)]
+    DEFAULT_CSS = "PaginaTaverna JanelaConversa { width: 1fr; } PaginaTaverna #t-dir { width: 52; }"
 
     def compose(self) -> ComposeResult:
         yield JanelaConversa()
         with Vertical(id="t-dir"):
             yield JanelaRascunhosT()
-            yield JanelaPermissoes()
+            yield JanelaQuestsT()
 
     def on_mount(self) -> None:
         self._giro = self.set_interval(0.25, self._girar, pause=True)
@@ -324,10 +322,24 @@ class PaginaTaverna(Pagina):
         self.app.abrir_agente()
 
     def rodape_pagina(self):
-        return [("enter", "enviar", "noop"), ("a", "aprovar", "aprovar"), ("e", "editar", "editar"), ("d", "descartar", "descartar")]
+        return [("P", "pastas", "pastas"), ("M", "agente", "agente"), ("a", "aprovar", "aprovar"), ("e", "editar", "editar")]
 
     def _rascunho(self):
         return self.query_one(JanelaRascunhosT).atual() if self.app.nome_janela(self.app.focused) == "rascunhos-t" else None
+
+    def _quest(self):
+        return self.query_one(JanelaQuestsT).atual() if self.app.nome_janela(self.app.focused) == "quests-t" else None
+
+    def action_focar_quest(self) -> None:
+        q = self._quest()
+        if q:
+            self.app.pedir("iniciar", {"quest_id": q["id"]}, lambda ok, r: ok and self.app.abrir_pagina("foco", foco=True))
+
+    def action_concluir_quest(self) -> None:
+        q = self._quest()
+        if q:
+            from oma_rpg.ui.dialogos import Concluir
+            self.app.push_screen(Concluir(q))
 
     def action_aprovar(self) -> None:
         q = self._rascunho()

@@ -411,8 +411,8 @@ class EditarQuest(Dialogo):
     EditarQuest .campo { height: 1; }
     EditarQuest #conta { height: 3; margin-top: 1; }
     """)
-    CAMPOS = [("titulo", "título"), ("materia", "matéria"), ("est", "pomodoros"), ("dif", "dificuldade"), ("arco", "arco"),
-              ("prazo", "prazo")]
+    CAMPOS = [("titulo", "título"), ("materia", "matéria"), ("est", "pomodoros"), ("dif", "dificuldade"), ("prio", "prioridade"),
+              ("arco", "arco"), ("prazo", "prazo"), ("porque", "como resolver")]
 
     def __init__(self, q: dict | None, aprovar: bool = False) -> None:
         super().__init__()
@@ -433,11 +433,15 @@ class EditarQuest(Dialogo):
                 v = q.get(k, "")
                 if k == "dif":
                     v = str(q.get("dif", 2))
+                elif k == "prio":
+                    v = str(q.get("prio", 2))
                 elif k == "est":
                     v = str(q.get("est", 1))
                 with Horizontal(classes="campo"):
                     yield Static(rot, classes="rot")
                     yield Input(str(v or ""), id=f"c-{k}", placeholder={"prazo": "AAAA-MM-DD", "dif": "1 fácil, 2 média, 3 difícil",
+                                                                        "prio": "1 baixa, 2 média, 3 alta",
+                                                                        "porque": "passo a passo para resolver",
                                                                         "arco": "grupo, ex. Prova de Compiladores"}.get(k, ""))
             if not q:
                 with Horizontal(classes="campo"):

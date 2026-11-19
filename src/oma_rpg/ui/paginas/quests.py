@@ -176,7 +176,13 @@ class JanelaQuests(Janela):
             icone, cor = ic("pendente"), "texto"
         tit = Text()
         tit.append(icone + " ", style=a.cor(cor))
-        tit.append(q["titulo"], style=a.cor("mudo") if feita else (f"bold {a.cor('forte')}" if rodando else a.cor("texto")))
+        if q.get("bloqueada") and not feita:
+            tit.append("🔒 ", style=a.cor("yellow"))
+        elif q.get("prio", 2) == 3 and not feita:
+            tit.append("! ", style=f"bold {a.cor('red')}")
+        elif q.get("prio", 2) == 1 and not feita:
+            tit.append("⌄ ", style=a.cor("mudo"))
+        tit.append(q["titulo"], style=a.cor("mudo") if (feita or q.get("bloqueada")) else (f"bold {a.cor('forte')}" if rodando else a.cor("texto")))
         pom = D.pontos(a, q["feitos"], q["est"])
         pom.append(f"  {q['feitos']}/{q['est']}", style=a.cor("mudo"))
         rec = D.xp_bits(a, q["xp"], q["bits"], mudo=bool(feita))
@@ -267,11 +273,20 @@ class JanelaQuest(Janela):
         orig = Text()
         orig.append(q["materia"] or "sem matéria", style=a.cor(C.cor_materia(a.b, q["materia"])))
         orig.append(" criada pelo Mestre" if q["origem"] == "mestre" else " criada por você", style=a.cor("mudo"))
+        prio_txt = {3: ("alta", "red"), 2: ("média", "mudo"), 1: ("baixa", "mudo")}.get(q.get("prio", 2), ("média", "mudo"))
+        orig.append(" · prio ", style=a.cor("mudo"))
+        orig.append(prio_txt[0], style=a.cor(prio_txt[1]))
         itens.append(("txt", orig))
+        if q.get("depende_de"):
+            deps = ", ".join(f"#{d}" for d in q["depende_de"])
+            msg = f"🔒 bloqueada (falta {', '.join('#' + str(d) for d in q['faltam_deps'])})" if q.get("bloqueada") else f"trilha: após {deps}"
+            itens.append(("txt", Text(msg, style=a.cor("yellow") if q.get("bloqueada") else a.cor("mudo"))))
         if q["tipo"] == "daily":
             itens.append(("txt", Text("daily: vale uma vez por dia; vencida custa HP", style=a.cor("mudo"))))
         if q["porque"]:
-            itens += [("txt", l) for l in D.quebrar("por quê: " + q["porque"], w, a.cor("mudo"))]
+            itens.append(("txt", Text("")))
+            itens.append(("txt", Text("como resolver", style=f"bold {a.cor('forte')}")))
+            itens += [("txt", l) for l in D.quebrar(q["porque"], w, a.cor("texto"))]
         itens.append(("txt", Text("")))
         if q["subtarefas"]:
             itens.append(("txt", Text("subtarefas", style=f"bold {a.cor('forte')}")))

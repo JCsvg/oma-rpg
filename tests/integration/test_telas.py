@@ -581,8 +581,8 @@ async def test_taverna_p_libera_e_remove_pasta(app, tmp_path):
         assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [])
         await pilot.press("escape")
         await pilot.pause(0.2)
-        app.focar_janela("permissoes")
-        await pilot.press("enter")
+        app.focar_janela("quests-t")
+        await pilot.press("P")
         await pilot.pause(0.2)
         assert type(app.screen).__name__ == "Pastas"
 
@@ -611,8 +611,7 @@ async def test_pedido_do_mestre_abre_o_dialogo(app, tmp_path):
         assert str(estudo) in str(app.screen.query_one(".linha-texto").render())
         await pilot.press("s")
         assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [str(estudo)])
-        texto_perm = texto(app.query_one("#permissoes").query_one("Pintado"))
-        assert "1 liberada" in texto_perm and "Comp-Deci" in texto_perm
+        assert app.query_one("#quests-t") is not None
 
 
 async def test_mensagem_com_pasta_pergunta_antes_de_mandar(app, tmp_path):
@@ -636,7 +635,8 @@ async def test_taverna_m_escolhe_agente_e_modelo(app):
     async with app.run_test(size=(180, 48)) as pilot:
         await pilot.press("alt+7")
         await pilot.pause()
-        await pilot.click("#b-agente")
+        app.focar_janela("quests-t")
+        await pilot.press("M")
         await pilot.pause()
         assert isinstance(app.screen, AgenteDialogo)
         await pilot.press("down", "enter")
