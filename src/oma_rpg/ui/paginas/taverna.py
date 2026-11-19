@@ -165,7 +165,7 @@ class JanelaRascunhosT(Janela):
                   "JanelaRascunhosT #rt-pe { height: 3; }"
 
     def compose(self) -> ComposeResult:
-        yield Lista(self._linha, altura=6, id="rt-lista", cursor_apagado=True)
+        yield Lista(self._linha, altura=4, id="rt-lista", cursor_apagado=True)
         yield Pintado(self._pe, id="rt-pe")
 
     def pintar(self) -> None:
@@ -177,18 +177,36 @@ class JanelaRascunhosT(Janela):
 
     def _linha(self, q: dict, i: int, est) -> list[Text]:
         a = self.app
-        t = Text()
-        t.append(f"#{q['id']:<4}", style=a.cor("mudo"))
-        t.append(q["titulo"].split(":")[0], style=f"bold {a.cor('forte')}")
-        l2 = Text(f"     {q['est']} ", style=a.cor("mudo"))
-        l2.append("●  ", style=a.cor("mudo"))
+        w = max(20, est.largura)
+        p = q.get("prio", 2)
+        marca, cor = {3: ("! ", "red"), 2: ("· ", "accent"), 1: ("⌄ ", "mudo")}.get(p, ("· ", "mudo"))
+        t = Text(no_wrap=True, overflow="ellipsis")
+        t.append(f"#{q['id']:<3} ", style=a.cor("mudo"))
+        t.append(marca, style=f"bold {a.cor(cor)}" if p == 3 else a.cor(cor))
+        t.append(q["titulo"], style=f"bold {a.cor('forte')}")
+        t.truncate(w, overflow="ellipsis")
+
+        l2 = Text("     ")
+        l2.append(f"{q['est']}p ", style=a.cor("texto"))
         l2.append_text(D.diamantes(a, q["dif"]))
-        if q["prazo"]:
-            l2.append(f"  {C.dia_curto(q['prazo'])}", style=a.cor("mudo"))
-        l3 = Text.assemble((f"     {q['xp']} xp · {q['bits']}", a.cor("yellow")), (ic("bits"), a.cor("yellow")))
-        l4 = Text.assemble(("     a", a.cor("accent")), (" aprovar   ", a.cor("texto")), ("e", a.cor("accent")), (" editar   ", a.cor("texto")),
-                           ("d", a.cor("accent")), (" descartar", a.cor("texto"))) if est.cursor and est.foco else Text("")
-        return [Text(""), t, l2, l3, l4, Text("")]
+        l2.append(f" · {q['xp']} xp · {q['bits']}", style=a.cor("yellow"))
+        l2.append(ic("bits"), style=a.cor("yellow"))
+        if q.get("depende_de"):
+            l2.append(" · após " + ",".join(f"#{d}" for d in q["depende_de"]), style=a.cor("mudo"))
+        elif q["prazo"]:
+            l2.append(f" · {C.dia_curto(q['prazo'])}", style=a.cor("mudo"))
+        l2.truncate(w, overflow="ellipsis")
+
+        if est.cursor and est.foco:
+            l3 = Text.assemble(("     a", a.cor("accent")), (" aprovar   ", a.cor("texto")),
+                               ("e", a.cor("accent")), (" editar   ", a.cor("texto")),
+                               ("d", a.cor("accent")), (" descartar", a.cor("texto")))
+        elif q["porque"]:
+            l3 = Text("     " + q["porque"].replace("\n", " "), style=a.cor("mudo"), no_wrap=True, overflow="ellipsis")
+            l3.truncate(w, overflow="ellipsis")
+        else:
+            l3 = Text("")
+        return [t, l2, l3, Text("")]
 
     def _pe(self, w: int) -> Text:
         a = self.app
@@ -214,7 +232,7 @@ class JanelaQuestsT(Janela):
     DEFAULT_CSS = "JanelaQuestsT { height: 1fr; } JanelaQuestsT Lista { margin-top: 1; height: 1fr; }"
 
     def compose(self) -> ComposeResult:
-        yield Lista(self._linha, altura=2, id="qt-lista", cursor_sem_foco=True)
+        yield Lista(self._linha, altura=3, id="qt-lista", cursor_sem_foco=True)
 
     def pintar(self) -> None:
         a = self.app
@@ -224,9 +242,10 @@ class JanelaQuestsT(Janela):
 
     def _linha(self, q: dict, i: int, est) -> list[Text]:
         a = self.app
+        w = max(20, est.largura)
         p = q.get("prio", 2)
         marca, cor = {3: ("! ", "red"), 2: ("· ", "accent"), 1: ("⌄ ", "mudo")}.get(p, ("· ", "mudo"))
-        t = Text()
+        t = Text(no_wrap=True, overflow="ellipsis")
         t.append(f"#{q['id']:<3} ", style=a.cor("mudo"))
         if q.get("bloqueada"):
             t.append("🔒 ", style=a.cor("yellow"))
@@ -234,9 +253,15 @@ class JanelaQuestsT(Janela):
             t.append(marca, style=f"bold {a.cor(cor)}" if p == 3 else a.cor(cor))
         t.append(q["titulo"], style=a.cor("mudo") if q.get("bloqueada") else f"bold {a.cor('forte')}")
         dir_ = Text(f"{q['feitos']}/{q['est']}", style=a.cor("mudo"))
-        sub = Text(f"     depende de {', '.join('#' + str(d) for d in q['faltam_deps'])}" if q.get("bloqueada")
-                   else f"     {q['xp']} xp · {q['arco'] or q['materia'] or 'geral'}", style=a.cor("mudo"))
-        return [D.linha_lr(t, dir_, est.largura), sub]
+        l1 = D.linha_lr(t, dir_, w)
+        if q.get("bloqueada"):
+            sub = Text(f"     depende de {', '.join('#' + str(d) for d in q['faltam_deps'])}", style=a.cor("yellow"))
+        elif q["porque"]:
+            sub = Text(f"     {q['porque'].replace(chr(10), ' ')}", style=a.cor("mudo"), no_wrap=True, overflow="ellipsis")
+            sub.truncate(w, overflow="ellipsis")
+        else:
+            sub = Text(f"     {q['xp']} xp · {q['arco'] or q['materia'] or 'geral'}", style=a.cor("mudo"))
+        return [l1, sub, Text("")]
 
     def atual(self):
         return self.query_one(Lista).item_atual()
