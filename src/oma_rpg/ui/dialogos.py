@@ -1048,3 +1048,115 @@ class PedidoPasta(_Simples):
 
     def apertou(self, bid: str) -> None:
         self.dismiss(bid)
+
+
+class AgenteDialogo(Dialogo):
+    """Escolhe o agente CLI da taverna e o modelo (padrão ou específico)."""
+
+    DEFAULT_CSS = css(
+        "AgenteDialogo",
+        "AgenteDialogo #caixa { width: 82; } AgenteDialogo #agentes-lista { height: auto; max-height: 6; margin: 1 0 0 0; } "
+        "AgenteDialogo #modelos-lista { height: auto; max-height: 7; margin: 1 0; } "
+        "AgenteDialogo #rot-mod { color: $rpg-mudo; margin-top: 1; }",
+    )
+    BINDINGS = [Binding("escape", "cancelar", priority=True)]
+
+    def __init__(self, agentes: list[dict] | None = None) -> None:
+        super().__init__()
+        from oma_rpg import mestre
+        self._agentes = agentes if agentes is not None else mestre.detectar_agentes()
+        self._escolhido = self._agentes[0] if self._agentes else {"id": "claude", "rotulo": "Claude Code", "comando": "claude",
+                                                                  "disponivel": False, "modelos": [""]}
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = "agente e modelo do Mestre"
+            yield Static(Text("Escolha qual CLI responde na taverna. Opcionalmente escolha ou digite um modelo.",
+                              style=self.app.cor("mudo")), classes="linha-texto")
+            yield Lista(self._linha_agente, id="agentes-lista", cursor_sem_foco=True)
+            yield Static("modelo", id="rot-mod")
+            yield Lista(self._linha_modelo, id="modelos-lista", cursor_sem_foco=True)
+            yield Input(placeholder="ou digite outro modelo (opcional)…", id="modelo-custom")
+            with Horizontal(id="botoes"):
+                yield Botao("enter  usar este", id="usar", classes="cheio")
+                yield Botao("esc  fechar", id="fechar")
+            yield Static(pe(self.app, [("↑ ↓", "escolhe"), ("tab", "troca campo"), ("enter", "confirma"), ("esc", "fecha")]),
+                         classes="pe")
+
+    def on_mount(self) -> None:
+        m = self.app.mestre
+        ag_atual = getattr(m, "agente", "claude") if m is not None else "claude"
+        mod_atual = getattr(m, "modelo", "") if m is not None else ""
+        la = self.query_one("#agentes-lista", Lista)
+        idx = next((i for i, a in enumerate(self._agentes) if a["id"] == ag_atual), 0)
+        la.definir(self._agentes, cursor=idx)
+        self._escolhido = self._agentes[idx]
+        self._carregar_modelos(mod_atual)
+        la.focus()
+
+    def _carregar_modelos(self, mod_atual: str = "") -> None:
+        mods = list(self._escolhido.get("modelos") or [""])
+        lm = self.query_one("#modelos-lista", Lista)
+        c = mods.index(mod_atual) if mod_atual and mod_atual in mods else 0
+        lm.definir(mods, cursor=c)
+        if mod_atual and mod_atual not in mods:
+            self.query_one("#modelo-custom", Input).value = mod_atual
+
+    def _sincronizar_agente(self) -> None:
+        it = self.query_one("#agentes-lista", Lista).item_atual()
+        if it and it["id"] != self._escolhido["id"]:
+            self._escolhido = it
+            self._carregar_modelos("")
+
+    def on_key(self, ev) -> None:
+        if self.focused and self.focused.id == "agentes-lista":
+            self.call_after_refresh(self._sincronizar_agente)
+
+    def _linha_agente(self, ag: dict, i: int, est) -> list[Text]:
+        a = self.app
+        m = a.mestre
+        ativo = m is not None and getattr(m, "agente", "") == ag["id"]
+        ok = ag["disponivel"] or a.demo
+        t = Text()
+        t.append("✓ " if ativo else ("● " if ok else "○ "), style=a.cor("green") if ok else a.cor("mudo"))
+        t.append(ag["rotulo"], style=f"bold {a.cor('forte')}" if ok else a.cor("mudo"))
+        dir_ = Text("instalado" if ag["disponivel"] else "não encontrado", style=a.cor("mudo"))
+        return [D.linha_lr(t, dir_, est.largura)]
+
+    def _linha_modelo(self, mod: str, i: int, est) -> list[Text]:
+        a = self.app
+        m = a.mestre
+        ativo = m is not None and getattr(m, "agente", "") == self._escolhido["id"] and getattr(m, "modelo", "") == mod
+        rot = "padrão (do agente)" if not mod else mod
+        t = Text()
+        t.append("✓ " if ativo else "  ", style=a.cor("cyan"))
+        t.append(rot, style=a.cor("texto") if mod else a.cor("mudo"))
+        return [t]
+
+    def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
+        ev.stop()
+        if ev.lista.id == "agentes-lista":
+            self._escolhido = ev.item
+            self._carregar_modelos("")
+            self.query_one("#modelos-lista", Lista).focus()
+        elif ev.lista.id == "modelos-lista":
+            self._confirmar()
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        self._confirmar()
+
+    def _confirmar(self) -> None:
+        ag = self._escolhido
+        if not ag["disponivel"] and not self.app.demo:
+            self.app.avisar_erro(f"o comando {ag['comando']} não está instalado")
+            return
+        custom = self.query_one("#modelo-custom", Input).value.strip()
+        mod = custom if custom else (self.query_one("#modelos-lista", Lista).item_atual() or "")
+        self.dismiss((ag["id"], mod))
+
+    def apertou(self, bid: str) -> None:
+        if bid == "usar":
+            self._confirmar()
+        else:
+            self.action_cancelar()

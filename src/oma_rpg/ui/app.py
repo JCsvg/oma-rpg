@@ -442,6 +442,11 @@ class OmaRpgApp(App[None]):
     def mestre_estado(self) -> str:
         return self.mestre.estado if self.mestre is not None else "ausente"
 
+    def mestre_rotulo(self) -> str:
+        if self.mestre is None:
+            return "ausente"
+        return self.mestre.rotulo() if hasattr(self.mestre, "rotulo") else "claude"
+
     def _pintar_topo(self) -> None:
         trilha = self.pagina.trilha() if self.pagina is not None else [("", "")]
         self.query_one(Topo).pintar(trilha, self.pos > 0, self.pos < len(self.historico) - 1)
@@ -793,6 +798,18 @@ class OmaRpgApp(App[None]):
         from oma_rpg.ui.dialogos import Pastas
         if len(self.screen_stack) == 1:
             self.push_screen(Pastas())
+
+    def abrir_agente(self) -> None:
+        from oma_rpg.ui.dialogos import AgenteDialogo
+        if len(self.screen_stack) != 1:
+            return
+
+        def depois(res) -> None:
+            if not res or self.mestre is None or not hasattr(self.mestre, "definir_agente"):
+                return
+            ag, mod = res
+            self.mestre.definir_agente(ag, mod, salvar=not self.demo)
+        self.push_screen(AgenteDialogo(), depois)
 
     def abrir_repos(self) -> None:
         from oma_rpg.ui.dialogos import Repos

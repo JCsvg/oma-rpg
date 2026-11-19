@@ -11,7 +11,7 @@ import re
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Static, TextArea
 
 from oma_rpg.nucleo import consultas as C
@@ -63,7 +63,7 @@ class JanelaConversa(Janela):
 
     def pintar(self) -> None:
         a = self.app
-        self.titulo(f"{ic('mestre')} taverna", "Mestre · claude")
+        self.titulo(f"{ic('mestre')} taverna", f"Mestre · {a.mestre_rotulo()}")
         rows = a.b.todos("SELECT * FROM taverna ORDER BY ts, id")
         itens: list = []
         for r in rows[-200:]:
@@ -81,7 +81,7 @@ class JanelaConversa(Janela):
         l.scroll_end(animate=False)
         self.query_one(Pintado).pintar()
         c = self.query_one("#caixa-msg")
-        c.border_subtitle = "enter envia" if a.mestre_estado() != "ausente" else "claude não encontrado"
+        c.border_subtitle = "enter envia" if a.mestre_estado() != "ausente" else "M escolhe agente"
 
     def relogio(self) -> None:
         pass
@@ -92,10 +92,11 @@ class JanelaConversa(Janela):
         classe = a.cfg.classe(h["classe"]) if h else None
         m = a.mestre_estado()
         if m == "ausente":
-            t = Text.assemble(("● ", a.cor("mudo")), ("o comando claude não foi encontrado: instale o Claude Code para conversar", a.cor("mudo")))
+            t = Text.assemble(("● ", a.cor("mudo")), ("agente não encontrado: pressione M para escolher outro CLI", a.cor("mudo")))
         else:
-            t = Text.assemble(("● ", a.cor("cyan")), (f"Mestre conectado ao agente padrão do Omarchy. Fala em {classe['tema'].split(',')[0]} "
-                                                      f"(sua classe)." if classe else "Mestre conectado ao agente padrão do Omarchy.",
+            rot = a.mestre_rotulo()
+            t = Text.assemble(("● ", a.cor("cyan")), (f"Mestre conectado via {rot}. Fala em {classe['tema'].split(',')[0]} "
+                                                      f"(sua classe)." if classe else f"Mestre conectado via {rot}.",
                                                       a.cor("mudo")))
         return D.juntar([t, Text("─" * w, style=a.cor("linha"))])
 
@@ -160,7 +161,7 @@ class JanelaConversa(Janela):
 
 class JanelaRascunhosT(Janela):
     NOME = "rascunhos-t"
-    DEFAULT_CSS = "JanelaRascunhosT { height: 27; } JanelaRascunhosT Lista { margin-top: 1; height: 1fr; } " \
+    DEFAULT_CSS = "JanelaRascunhosT { height: 24; } JanelaRascunhosT Lista { margin-top: 1; height: 1fr; } " \
                   "JanelaRascunhosT #rt-pe { height: 5; }"
 
     def compose(self) -> ComposeResult:
@@ -211,29 +212,35 @@ class JanelaRascunhosT(Janela):
 class JanelaPermissoes(Janela):
     NOME = "permissoes"
     FOCAVEL = True
-    DEFAULT_CSS = "JanelaPermissoes #b-pastas { margin-top: 1; }"
+    DEFAULT_CSS = "JanelaPermissoes #perm-botoes { height: auto; margin-top: 1; } JanelaPermissoes Botao { margin-right: 1; }"
 
     def compose(self) -> ComposeResult:
         yield Pintado(self._desenhar)
-        yield Botao("P  pastas que o Mestre lê", id="b-pastas")
+        with Horizontal(id="perm-botoes"):
+            yield Botao("P  pastas", id="b-pastas")
+            yield Botao("M  agente", id="b-agente")
 
     def pintar(self) -> None:
-        self.titulo("o que o Mestre pode fazer", "P pastas")
+        self.titulo("o que o Mestre pode fazer", "P pastas · M agente")
         self.query_one(Pintado).pintar()
 
     def on_botao_apertado(self, ev: Botao.Apertado) -> None:
         ev.stop()
-        self.app.abrir_pastas()
+        if ev.botao.id == "b-agente":
+            self.app.abrir_agente()
+        else:
+            self.app.abrir_pastas()
 
     def rodape(self):
-        return [("P", "pastas", "noop"), ("enter", "pastas", "noop")]
+        return [("P", "pastas", "noop"), ("M", "agente", "noop")]
 
     def _desenhar(self, w: int) -> Text:
         a = self.app
         linhas = [Text("")]
         ps = C.pastas(a.b, a.agora())
         n = len(ps)
-        for ok, verbo, txt in ((True, "ler", "status, quests, histórico"), (True, "criar", "rascunhos de quest"),
+        for ok, verbo, txt in ((True, "agente", f"{a.mestre_rotulo()} (M muda)"),
+                               (True, "ler", "status, quests, histórico"), (True, "criar", "rascunhos de quest"),
                                (True, "sugerir", "estimativas e prazos"),
                                (bool(n), "pastas", f"{n} liberada{'s' if n != 1 else ''}, só leitura" if n else "nenhuma: P libera"),
                                (False, "aprovar", "nunca: só você aprova"),
@@ -261,7 +268,8 @@ class PaginaTaverna(Pagina):
         "permissoes": {"esq": "conversa", "cima": "rascunhos-t"},
     }
     BINDINGS = [Binding("a", "aprovar", show=False), Binding("e", "editar", show=False), Binding("d", "descartar", show=False),
-                Binding("A,shift+a", "aprovar_todos", show=False), Binding("P,shift+p", "pastas", show=False)]
+                Binding("A,shift+a", "aprovar_todos", show=False), Binding("P,shift+p", "pastas", show=False),
+                Binding("M,shift+m", "agente", show=False)]
     DEFAULT_CSS = "PaginaTaverna JanelaConversa { width: 90; } PaginaTaverna #t-dir { width: 1fr; }"
 
     def compose(self) -> ComposeResult:
@@ -290,7 +298,7 @@ class PaginaTaverna(Pagina):
     def enviar(self, texto: str) -> None:
         m = self.app.mestre
         if m is None or self.app.mestre_estado() == "ausente":
-            self.app.avisar_erro("O Claude Code não está instalado: a taverna precisa do comando claude.")
+            self.app.avisar_erro("Agente não encontrado: pressione M na taverna para escolher outro.")
             return
         nova = pasta_na_mensagem(self.app, texto)
         if nova:
@@ -311,6 +319,9 @@ class PaginaTaverna(Pagina):
 
     def action_pastas(self) -> None:
         self.app.abrir_pastas()
+
+    def action_agente(self) -> None:
+        self.app.abrir_agente()
 
     def rodape_pagina(self):
         return [("enter", "enviar", "noop"), ("a", "aprovar", "aprovar"), ("e", "editar", "editar"), ("d", "descartar", "descartar")]

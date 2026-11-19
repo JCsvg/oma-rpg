@@ -628,3 +628,21 @@ async def test_mensagem_com_pasta_pergunta_antes_de_mandar(app, tmp_path):
         assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [str(estudo)])
         assert C.pastas(app.b, app.agora())[0]["modo"] == "uma_vez"
         assert await esperar(pilot, lambda: app.b.um("SELECT 1 FROM taverna WHERE texto LIKE 'crie quests a partir%'") is not None)
+
+
+async def test_taverna_m_escolhe_agente_e_modelo(app):
+    from oma_rpg.ui.dialogos import AgenteDialogo
+
+    async with app.run_test(size=(180, 48)) as pilot:
+        await pilot.press("alt+7")
+        await pilot.pause()
+        await pilot.click("#b-agente")
+        await pilot.pause()
+        assert isinstance(app.screen, AgenteDialogo)
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.mestre.agente == "agy"
+        assert app.mestre.modelo == "gemini-3-pro"
+        assert app.mestre_rotulo() == "agy · gemini-3-pro"

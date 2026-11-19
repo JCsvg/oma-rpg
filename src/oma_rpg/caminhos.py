@@ -49,6 +49,10 @@ def arquivo_balanceamento_usuario() -> Path:
     return pasta_config() / "balanceamento.toml"
 
 
+def arquivo_mestre() -> Path:
+    return pasta_config() / "mestre.json"
+
+
 def garantir(p: Path, modo: int = 0o700) -> Path:
     p.mkdir(parents=True, exist_ok=True)
     try:

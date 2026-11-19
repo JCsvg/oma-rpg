@@ -24,6 +24,47 @@ import shutil
 import subprocess
 import threading
 
+from oma_rpg import caminhos
+
+AGENTES = (
+    {"id": "claude", "rotulo": "Claude Code", "comando": "claude", "modelos": ["", "sonnet", "opus", "haiku"]},
+    {"id": "agy", "rotulo": "Antigravity (agy)", "comando": "agy",
+     "modelos": ["", "gemini-3-pro", "gemini-3-flash", "claude-sonnet-4-6", "claude-opus-4-6"]},
+    {"id": "codex", "rotulo": "Codex", "comando": "codex", "modelos": ["", "o3", "o4-mini", "gpt-4.1"]},
+    {"id": "opencode", "rotulo": "OpenCode", "comando": "opencode", "modelos": [""]},
+)
+_POR_ID = {a["id"]: a for a in AGENTES}
+
+
+def detectar_agentes(forcar: dict[str, str] | None = None) -> list[dict]:
+    """Lista os agentes suportados com o executável encontrado no PATH."""
+    saida = []
+    for a in AGENTES:
+        exe = forcar.get(a["id"]) if forcar is not None else shutil.which(a["comando"])
+        saida.append({**a, "exe": exe, "disponivel": bool(exe)})
+    return saida
+
+
+def ler_preferencia() -> tuple[str, str]:
+    """Lê (agente, modelo) salvos em ~/.config/oma-rpg/mestre.json."""
+    try:
+        d = json.loads(caminhos.arquivo_mestre().read_text("utf-8"))
+        ag = str(d.get("agente") or "claude")
+        mod = str(d.get("modelo") or "").strip()
+        return (ag if ag in _POR_ID else "claude", mod)
+    except (OSError, ValueError, TypeError):
+        return ("claude", "")
+
+
+def salvar_preferencia(agente: str, modelo: str = "") -> None:
+    """Grava (agente, modelo) em ~/.config/oma-rpg/mestre.json."""
+    if agente not in _POR_ID:
+        return
+    arq = caminhos.arquivo_mestre()
+    caminhos.garantir(arq.parent)
+    arq.write_text(json.dumps({"agente": agente, "modelo": modelo.strip()}, ensure_ascii=False, indent=2) + "\n", "utf-8")
+
+
 PERMITIDOS = ["Bash(oma-rpg status:*)", "Bash(oma-rpg quests:*)", "Bash(oma-rpg history:*)", "Bash(oma-rpg draft:*)",
               "Bash(oma-rpg editar:*)", "Bash(oma-rpg pastas:*)", "Bash(oma-rpg ls:*)", "Bash(oma-rpg ver:*)"]
 FERRAMENTAS = "Bash,Read,Glob,Grep"
@@ -59,8 +100,7 @@ def _regra(caminho: str) -> str:
     return "/" + caminho.rstrip("/") if caminho.startswith("/") else caminho
 
 
-def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tuple = ()) -> list[str]:
-    """Os argumentos do `claude -p` da taverna. As pastas são conferidas de novo (nada sensível passa)."""
+def _pastas_validas(pastas: list[str] | tuple) -> list[str]:
     from pathlib import Path
 
     from oma_rpg.nucleo import pastas as P
@@ -72,8 +112,17 @@ def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tupl
             continue
         if r.is_dir() and not P.motivo_sensivel(r) and str(r) not in validas:
             validas.append(str(r))
+    return validas
+
+
+def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tuple = (), modelo: str = "") -> list[str]:
+    """Os argumentos do `claude -p` da taverna. As pastas são conferidas de novo (nada sensível passa)."""
+    from oma_rpg.nucleo import pastas as P
+    validas = _pastas_validas(pastas)
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project", "--strict-mcp-config",
            "--tools", FERRAMENTAS, "--permission-mode", "dontAsk", "--append-system-prompt", PROMPT]
+    if modelo:
+        cmd += ["--model", modelo]
     if sessao and all(c in "0123456789abcdef-" for c in sessao) and len(sessao) <= 64:
         cmd[2:2] = ["--resume", sessao]
     for p in validas:
@@ -81,6 +130,36 @@ def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tupl
     cmd += ["--disallowedTools", *BLOQUEADOS, *[f"Read({_regra(str(s))}/**)" for s in P.sensiveis()]]
     cmd += ["--allowedTools", *PERMITIDOS, *[f"Read({_regra(p)}/**)" for p in validas]]
     return cmd
+
+
+def comando_agente(agente: str, exe: str, sessao: str | None = None, pastas: list[str] | tuple = (),
+                   modelo: str = "") -> tuple[list[str], bool]:
+    """Monta (argv, precisa_prompt_no_stdin) para o agente escolhido."""
+    if agente == "claude":
+        return comando_claude(exe, sessao, pastas, modelo), False
+    validas = _pastas_validas(pastas)
+    sessao_ok = bool(sessao and all(c in "0123456789abcdef-" for c in sessao) and len(sessao) <= 64)
+    if agente == "agy":
+        cmd = [exe, "-p", "--output-format", "stream-json", "--mode", "plan"]
+        if modelo:
+            cmd += ["--model", modelo]
+        if sessao_ok:
+            cmd += ["--conversation", sessao]
+        for p in validas:
+            cmd += ["--add-dir", p]
+        return cmd, not sessao_ok
+    if agente == "codex":
+        cmd = [exe, "exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check"]
+        if modelo:
+            cmd += ["-m", modelo]
+        cmd.append("-")
+        return cmd, True
+    if agente == "opencode":
+        cmd = [exe, "run", "--format", "json"]
+        if modelo:
+            cmd += ["-m", modelo]
+        return cmd, True
+    return comando_claude(exe, sessao, pastas, modelo), False
 
 
 def resumo_resultado(conteudo) -> str:
@@ -135,24 +214,61 @@ class _Base:
 
 
 class MestreClaude(_Base):
-    def __init__(self, exe: str | None = None, pasta=None) -> None:
+    def __init__(self, exe: str | None = None, pasta=None, agente: str | None = None, modelo: str | None = None) -> None:
         super().__init__()
-        self.exe = exe or shutil.which("claude")
+        ag_salvo, mod_salvo = ler_preferencia()
+        self.agente = agente if agente in _POR_ID else ag_salvo
+        self.modelo = (modelo if modelo is not None else mod_salvo).strip()
         self.pasta = pasta
-        self.estado = "pronto" if self.exe else "ausente"
         self._proc: subprocess.Popen | None = None
         self.sessao: str | None = None
+        if exe is not None:
+            self.exe = exe
+        else:
+            self.exe = self._resolver_exe(self.agente)
+            if not self.exe:
+                for info in detectar_agentes():
+                    if info["disponivel"]:
+                        self.agente = info["id"]
+                        self.exe = info["exe"]
+                        self.modelo = ""
+                        break
+        self.estado = "pronto" if self.exe else "ausente"
+
+    @staticmethod
+    def _resolver_exe(agente: str) -> str | None:
+        cmd = _POR_ID.get(agente, {}).get("comando", "claude")
+        return shutil.which(cmd)
+
+    def rotulo(self) -> str:
+        return f"{self.agente} · {self.modelo}" if self.modelo else self.agente
+
+    def definir_agente(self, agente: str, modelo: str = "", salvar: bool = True) -> None:
+        if agente not in _POR_ID:
+            return
+        mod = modelo.strip()
+        if agente != self.agente or mod != self.modelo:
+            self.sessao = None
+            if self.app is not None:
+                self.app.estado.definir("taverna_sessao", None)
+        self.agente = agente
+        self.modelo = mod
+        self.exe = self._resolver_exe(agente)
+        if salvar:
+            salvar_preferencia(agente, mod)
+        self._mudar("pronto" if self.exe else "ausente")
 
     def enviar(self, texto: str) -> None:
         if not self.exe:
-            self._registrar("sistema", "O Claude Code não está instalado (comando claude). A taverna precisa dele.")
+            cmd = _POR_ID.get(self.agente, {}).get("comando", self.agente)
+            self._registrar("sistema", f"O comando {cmd} não está instalado. Pressione M para escolher outro agente.")
             return
         if self.estado == "pensando":
             return
         self._registrar("voce", texto)
         self._mudar("pensando")
         pastas: list[str] = []
-        if self.app is not None:  # lido aqui, na thread da interface (o banco não é dividido com a thread do claude)
+        if self.app is not None:  # lido aqui, na thread da interface (o banco não é dividido com a thread do agente)
             from oma_rpg.nucleo import consultas
             pastas = consultas.caminhos_liberados(self.app.b, self.app.agora())
         threading.Thread(target=self._rodar, args=(expandir(texto), pastas), daemon=True).start()
@@ -164,10 +280,12 @@ class MestreClaude(_Base):
             self.sessao = self.app.estado.obter("taverna_sessao")
         pendentes: dict[str, str] = {}
         try:
-            self._proc = subprocess.Popen(comando_claude(self.exe, self.sessao, pastas or []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            argv, prefixar = comando_agente(self.agente, self.exe, self.sessao, pastas or [], self.modelo)
+            entrada = f"{PROMPT}\n\nPedido do JC:\n{prompt}" if prefixar else prompt
+            self._proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                           stderr=subprocess.DEVNULL, cwd=str(pasta), env={**os.environ, "OMA_RPG_MESTRE": "1"},
                                           text=True, start_new_session=True)
-            self._proc.stdin.write(prompt)
+            self._proc.stdin.write(entrada)
             self._proc.stdin.close()
             for linha in self._proc.stdout:
                 try:
@@ -184,8 +302,9 @@ class MestreClaude(_Base):
 
     def _tratar(self, d: dict, pendentes: dict[str, str]) -> None:
         tipo = d.get("type")
-        if d.get("session_id") and d.get("session_id") != self.sessao:
-            self.sessao = d["session_id"]
+        sid = d.get("session_id") or d.get("conversation_id") or d.get("thread_id")
+        if sid and sid != self.sessao:
+            self.sessao = sid
             if self.app is not None:
                 self.app._na_ui(self.app.estado.definir, "taverna_sessao", self.sessao)
         if tipo == "assistant":
@@ -203,6 +322,14 @@ class MestreClaude(_Base):
                     if c.get("is_error") and not res.startswith("erro"):
                         res = "negado: " + res
                     self._registrar("cli", cmd or "(comando)", {"resultado": res})
+        elif tipo == "item.completed":
+            item = d.get("item") or {}
+            if item.get("type") == "agent_message" and item.get("text", "").strip():
+                self._registrar("mestre", item["text"].strip())
+            elif item.get("type") == "command_execution":
+                cmd = str(item.get("command", ""))[:300]
+                res = resumo_resultado(item.get("aggregated_output"))
+                self._registrar("cli", cmd or "(comando)", {"resultado": res})
 
     def parar(self) -> None:
         p = self._proc
@@ -220,6 +347,17 @@ class MestreFalso(_Base):
         super().__init__()
         self.cliente = cliente
         self.n = 0
+        self.agente = "claude"
+        self.modelo = ""
+
+    def rotulo(self) -> str:
+        return f"{self.agente} · {self.modelo}" if self.modelo else self.agente
+
+    def definir_agente(self, agente: str, modelo: str = "", salvar: bool = False) -> None:
+        if agente in _POR_ID:
+            self.agente = agente
+            self.modelo = modelo.strip()
+            self._mudar("pronto")
 
     def enviar(self, texto: str) -> None:
         if self.estado == "pensando" or self.app is None:
