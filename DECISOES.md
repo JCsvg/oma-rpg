@@ -89,7 +89,7 @@ Arredondamento: o `round` do design é o escolar (0,5 sobe). O `round` do Python
 
 ## 8. Memória (pedido do JC)
 
-Ver a tabela no README. O que segura a memória: biblioteca padrão para banco, socket, git e inotify; páginas, diálogos e o `TextArea` da taverna importados só quando abrem; uma página montada por vez; listas virtualizadas; timer só com relógio rodando; o serviço numa thread só.
+Medido com Textual 8.2.8, `VmRSS`: interface `--demo` em pty 180x48, 51,6 MB em repouso e 62,8 MB depois de 4 rodadas por todas as telas (Python 3.14.8; 49,9 e 60,9 MB no 3.13.18); serviço com um ano de histórico e um repositório observado, 25,0 MB (22,6 MB no 3.13). Tetos do teste: 55, 85 e 40 MB. O cache do SQLite das conexões de leitura caiu para 512 KiB e valeu 1,2 MB no repouso. O que segura a memória: biblioteca padrão para banco, socket, git e inotify; páginas, diálogos e o `TextArea` da taverna importados só quando abrem; uma página montada por vez; listas virtualizadas; timer só com relógio rodando; o serviço numa thread só.
 
 ## 9. Capturas
 

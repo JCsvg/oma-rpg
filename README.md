@@ -189,11 +189,11 @@ Em alguns terminais `Ctrl+j` chega como Enter e `Ctrl+h` como Backspace: use `Ct
 
 Medido com Textual 8.2.8, lendo o `VmRSS` do processo:
 
-| Processo | Situação | Python 3.14.8 | Meta |
-|---|---|---|---|
-| interface (`--demo`, pty 180x48) | em repouso | 51,6 MB | até 55 MB |
-| interface (`--demo`, pty 180x48) | depois de 4 rodadas pelos 7 painéis, classes, abas, camadas, busca, ajuda e taverna | 62,8 MB | até 85 MB |
-| serviço | um ano de histórico e um repositório observado, em repouso | 24,8 MB | até 40 MB |
+| Processo | Situação | Python 3.14.8 | Python 3.13.18 | Meta |
+|---|---|---|---|---|
+| interface (`--demo`, pty 180x48) | em repouso | 51,6 MB | 49,9 MB | até 55 MB |
+| interface (`--demo`, pty 180x48) | depois de 4 rodadas pelos 7 painéis, classes, abas, camadas, busca, ajuda e taverna | 62,8 MB | 60,9 MB | até 85 MB |
+| serviço | um ano de histórico e um repositório observado, em repouso | 25,0 MB | 22,6 MB | até 40 MB |
 
 O teste `tests/integration/test_memoria.py` falha se os números passarem das metas.
 
