@@ -81,14 +81,45 @@ def pomodoro(j, minutos: float = 25, quest=None, pausa: bool = True):
 
 
 # ---------------------------------------------------------------- interface
-@pytest.fixture
-def app(tmp_path):
+def _app(tmp_path, estado="foco", **extra):
     from oma_rpg.falso import montar_demo
     from oma_rpg.ui.app import OmaRpgApp
-    kw = montar_demo(pasta=tmp_path / "demo", fixo=True)
+    kw = montar_demo(pasta=tmp_path / "demo", fixo=True, estado=estado)
+    kw.update(extra)
     a = OmaRpgApp(**kw, abertura=False)
-    yield a
-    kw["cliente"].fechar()
+    a.jogo = kw["cliente"].jogo
+    return a
+
+
+@pytest.fixture
+def app(tmp_path):
+    """O --demo com o 4º pomodoro rodando há 6:18 (relógio parado)."""
+    return _app(tmp_path)
+
+
+@pytest.fixture
+def app_pausa(tmp_path):
+    """O --demo na pausa curta depois do 3º pomodoro (o painel do design)."""
+    return _app(tmp_path, "pausa")
+
+
+@pytest.fixture
+def app_vazio(tmp_path, cfg):
+    """Sem herói: abre na criação de personagem."""
+    from oma_rpg.cliente import ClienteLocal
+    from oma_rpg.falso import RelogioDemo, ts
+    from oma_rpg.mestre import MestreFalso
+    from oma_rpg.nucleo.banco import Banco
+    from oma_rpg.nucleo.jogo import Jogo
+    from oma_rpg.ui.app import OmaRpgApp
+    from oma_rpg.ui.estado import Estado
+    arq = tmp_path / "vazio" / "rpg.sqlite3"
+    j = Jogo(Banco(arq), cfg, RelogioDemo(ts("2026-11-18", 9), fixo=True), random.Random(1))
+    c = ClienteLocal(j)
+    a = OmaRpgApp(cliente=c, banco=Banco(arq, leitura=True), cfg=cfg, relogio=j.rel, estado=Estado(tmp_path / "est"),
+                  demo=True, abertura=False, mestre=MestreFalso(c))
+    a.jogo = j
+    return a
 
 
 async def esperar(pilot, cond, tempo: float = 3.0) -> bool:
