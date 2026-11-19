@@ -138,3 +138,26 @@ def test_pedido_quebrado_nao_derruba(servico):
     c = cliente(servico)
     assert pedir(c, "ping")[0]
     c.fechar()
+
+
+def test_mestre_pelo_socket_nao_libera_pasta(servico, tmp_path):
+    estudo = tmp_path / "estudo"
+    estudo.mkdir()
+    j = cliente(servico)
+    pedir(j, "criar_heroi", {"nome": "yahiro", "classe": "programa"})
+    m = cliente(servico, papel="mestre")
+    for cmd, a in (("pasta_adicionar", {"caminho": str(estudo)}), ("pasta_remover", {"caminho": str(estudo)}),
+                   ("responder_pedido", {"id": 1, "resposta": "sempre"})):
+        ok, erro = pedir(m, cmd, a)
+        assert not ok and "Mestre não pode" in erro
+    ok, r = pedir(m, "pedir_pasta", {"caminho": str(estudo)})
+    assert ok and r["liberada"] is False
+    assert evento(j, "pedido_pasta")["caminho"] == str(estudo)
+    ok, r2 = pedir(m, "pastas")
+    assert ok and r2["pastas"] == []
+    ok, _ = pedir(j, "responder_pedido", {"id": r["id"], "resposta": "uma_vez"})
+    assert ok
+    ok, r3 = pedir(m, "pastas")
+    assert [p["modo"] for p in r3["pastas"]] == ["uma_vez"]
+    j.fechar()
+    m.fechar()

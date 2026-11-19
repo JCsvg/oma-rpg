@@ -100,3 +100,87 @@ def test_cli_fala_com_o_servico_como_mestre(com_heroi, cfg):
         assert any(e.get("evento") == "rascunho" for e in vistos)
     finally:
         s.encerrar()
+
+
+# ---------------------------------------------------------------- pastas: ls, ver e pastas
+def _liberar(tmp_path, cfg, pasta):
+    from oma_rpg import caminhos
+    from oma_rpg.nucleo.banco import Banco
+    from oma_rpg.nucleo.jogo import Jogo
+    b = Banco(caminhos.arquivo_banco())
+    Jogo(b, cfg).pasta_adicionar(str(pasta))
+    b.fechar()
+
+
+def test_cli_ls_e_ver_so_nas_pastas_liberadas(com_heroi, cfg, tmp_path):
+    estudo = tmp_path / "Comp-Deci"
+    (estudo / "aulas").mkdir(parents=True)
+    (estudo / "aulas" / "aula1.md").write_text("entropia\n")
+    (estudo / "slides.pdf").write_bytes(b"%PDF-1.4\n" + b"\x00" * 4000)
+    fora = tmp_path / "fora"
+    fora.mkdir()
+    (fora / "x.txt").write_text("não\n")
+    (estudo / "link").symlink_to(fora)
+    antes = heroi(com_heroi)
+    r = json.loads(rodar(com_heroi, "ls", str(estudo), "--json").stdout)
+    assert not r["ok"] and "fora das pastas liberadas" in r["erro"] and "tecla P" in r["erro"]
+    _liberar(tmp_path, cfg, estudo)
+    r = json.loads(rodar(com_heroi, "pastas", "--json").stdout)
+    assert [p["caminho"] for p in r["dados"]["pastas"]] == [str(estudo)]
+    r = json.loads(rodar(com_heroi, "ls", str(estudo), "-r", "--json").stdout)
+    assert r["ok"] and {"aulas", "aulas/aula1.md", "slides.pdf", "link"} <= {i["nome"] for i in r["dados"]["itens"]}
+    assert json.loads(rodar(com_heroi, "ver", str(estudo / "aulas" / "aula1.md"), "--json").stdout)["dados"]["conteudo"] == "entropia\n"
+    pdf = json.loads(rodar(com_heroi, "ver", str(estudo / "slides.pdf"), "--json").stdout)["dados"]
+    assert pdf["conteudo"] is None and pdf["tamanho"] > 4000
+    for alvo in (fora / "x.txt", estudo / "link" / "x.txt", f"{estudo}/../fora/x.txt"):
+        r = json.loads(rodar(com_heroi, "ver", str(alvo), "--json").stdout)
+        assert not r["ok"], alvo
+    assert "entropia" in rodar(com_heroi, "ver", str(estudo / "aulas" / "aula1.md")).stdout
+    assert heroi(com_heroi) == antes
+
+
+def test_cli_nao_libera_pasta(com_heroi, tmp_path):
+    for sub in (["liberar", str(tmp_path)], ["pasta_adicionar", str(tmp_path)], ["pastas", "--add", str(tmp_path)]):
+        assert rodar(com_heroi, *sub).returncode != 0
+    assert json.loads(rodar(com_heroi, "pastas", "--json").stdout)["dados"]["pastas"] == []
+
+
+def test_cli_na_taverna_pede_e_espera_o_jc(com_heroi, cfg, tmp_path):
+    """Dentro da taverna (OMA_RPG_MESTRE=1), ls numa pasta nova pede ao JC; quando ele libera, o ls continua."""
+    import threading
+    import time as _t
+    from oma_rpg import caminhos
+    from oma_rpg.nucleo.banco import Banco
+    from oma_rpg.nucleo.jogo import Jogo
+    from oma_rpg.servico import Servico
+    estudo = tmp_path / "nova"
+    estudo.mkdir()
+    (estudo / "a.txt").write_text("ok\n")
+    j = Jogo(Banco(caminhos.arquivo_banco()), cfg)
+    s = Servico(jogo=j, notificar=lambda t, c: None)
+    pedidos = []
+    j.ouvintes.append(lambda e: e.get("evento") == "pedido_pasta" and pedidos.append(e))
+    s.iniciar()
+    try:
+        env = dict(env_sub(com_heroi), OMA_RPG_MESTRE="1")
+        resultado = {}
+
+        def chamar():
+            resultado["r"] = subprocess.run([sys.executable, "-m", "oma_rpg", "ls", str(estudo), "--json"], capture_output=True,
+                                            text=True, timeout=60, env=env)
+        t = threading.Thread(target=chamar)
+        t.start()
+        fim = _t.time() + 15
+        while not pedidos and _t.time() < fim:
+            _t.sleep(0.1)
+        assert pedidos and pedidos[0]["caminho"] == str(estudo)
+        from oma_rpg.cliente import ClienteServico
+        c = ClienteServico(iniciar=None)  # a interface, com a chave de jogador
+        assert c.conectar() and c.papel == "jogador"
+        assert c.pedir_e_esperar("responder_pedido", {"id": pedidos[0]["id"], "resposta": "sempre"})[0]
+        c.fechar()
+        t.join(30)
+        d = json.loads(resultado["r"].stdout)
+        assert d["ok"] and [i["nome"] for i in d["dados"]["itens"]] == ["a.txt"]
+    finally:
+        s.encerrar()

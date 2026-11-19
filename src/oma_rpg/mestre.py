@@ -1,8 +1,16 @@
 """O Mestre da taverna: o Claude Code do usuário, com a skill oma-rpg.
 
-MestreClaude roda `claude -p` (a mensagem vai pela entrada padrão, nunca pela linha de comando de um shell) com
-todas as ferramentas e pastas liberadas (`--permission-mode bypassPermissions` e `--add-dir /`). Mesmo que o modelo
-tente, o CLI não tem como aprovar, concluir ou dar XP (ver comandos.py). A saída `stream-json` vira as mensagens da
+MestreClaude roda `claude -p` (a mensagem vai pela entrada padrão, nunca pela linha de comando de um shell) só com
+leitura:
+- ferramentas: Bash, Read, Glob e Grep (`--tools`); Write, Edit, rede e Agent/Task não existem nem são permitidos;
+- Bash só para os comandos do oma-rpg (status, quests, history, draft, editar, pastas, ls e ver);
+- Read, Glob e Grep só nas pastas que o JC liberou na taverna (`--add-dir` e `Read(//pasta/**)`), com as pastas
+  sensíveis negadas de novo (`--disallowedTools Read(//...)`);
+- sem as configurações do usuário (`--setting-sources project`: nem o agente padrão nem as regras amplas do JC entram)
+  e sem servidores MCP (`--strict-mcp-config`); o que não está liberado é negado (`--permission-mode dontAsk`).
+Restringir `ls` e `find` do Bash por caminho não é seguro (`..`, links simbólicos, comandos encadeados); por isso o
+Mestre lista e lê pelo `oma-rpg ls` e `oma-rpg ver`, que conferem o caminho resolvido. Mesmo que o modelo tente, o CLI
+não tem como aprovar, concluir, liberar pasta ou dar XP (ver comandos.py). A saída `stream-json` vira as mensagens da
 taverna; o que vem do modelo é texto, nunca marcação nem comando.
 
 MestreFalso responde com frases prontas no --demo e cria rascunhos com o papel de Mestre.
@@ -16,12 +24,20 @@ import shutil
 import subprocess
 import threading
 
+PERMITIDOS = ["Bash(oma-rpg status:*)", "Bash(oma-rpg quests:*)", "Bash(oma-rpg history:*)", "Bash(oma-rpg draft:*)",
+              "Bash(oma-rpg editar:*)", "Bash(oma-rpg pastas:*)", "Bash(oma-rpg ls:*)", "Bash(oma-rpg ver:*)"]
+FERRAMENTAS = "Bash,Read,Glob,Grep"
+BLOQUEADOS = ["Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Task"]
 PROMPT = (
-    "Você é o Mestre do oma-rpg, um RPG de estudo. Use a skill oma-rpg se ela estiver instalada. Para interagir com o "
-    "jogo, use os comandos oma-rpg status, quests, history, draft e editar, sempre com --json; você também tem acesso "
-    "às ferramentas e pastas do sistema quando precisar consultar arquivos ou projetos. Você ajuda a definir quests "
-    "(rascunhos), mas não aprova, não conclui e não dá XP: a recompensa sai da tabela do jogo e o jogador aprova pela "
-    "interface. Responda em português do Brasil, curto, sem travessão, no tom da classe do herói."
+    "Você é o Mestre do oma-rpg, um RPG de estudo. Use a skill oma-rpg se ela estiver instalada. Para o jogo, use só "
+    "oma-rpg status, quests, history, draft e editar, sempre com --json. Para ver as pastas de estudo do JC, use "
+    "oma-rpg pastas --json (as liberadas), oma-rpg ls PASTA --json e oma-rpg ver ARQUIVO --json; dentro delas você "
+    "também pode usar Read, Glob e Grep. Só leitura: não escreva, não edite, não rode outros comandos e não delegue a "
+    "subagentes. PDF grande: veja só nome e tamanho, e peça o texto (ver --texto) só do arquivo que o JC quiser. Se a "
+    "pasta não estiver liberada, peça ao JC para liberar na Taverna (tecla P); o oma-rpg ls numa pasta nova também "
+    "pergunta a ele. Você ajuda a definir quests (rascunhos), mas não aprova, não conclui e não dá XP: a recompensa sai "
+    "da tabela do jogo e o jogador aprova pela interface. Responda em português do Brasil, curto, sem travessão, no "
+    "tom da classe do herói."
 )
 ATALHOS = {
     "/revisão": "Faça a revisão semanal: rode oma-rpg status --json e oma-rpg history --days 7 --json, diga em 3 linhas o "
@@ -38,11 +54,32 @@ def expandir(texto: str) -> str:
     return ATALHOS.get(t.split()[0].lower(), t) if t.startswith("/") else t
 
 
-def comando_claude(exe: str, sessao: str | None = None) -> list[str]:
-    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", "default",
-           "--permission-mode", "bypassPermissions", "--add-dir", "/", "--append-system-prompt", PROMPT]
+def _regra(caminho: str) -> str:
+    """Caminho absoluto na sintaxe de regra do Claude Code: `//` no começo é a raiz do sistema."""
+    return "/" + caminho.rstrip("/") if caminho.startswith("/") else caminho
+
+
+def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tuple = ()) -> list[str]:
+    """Os argumentos do `claude -p` da taverna. As pastas são conferidas de novo (nada sensível passa)."""
+    from pathlib import Path
+
+    from oma_rpg.nucleo import pastas as P
+    validas = []
+    for p in pastas:
+        try:
+            r = Path(os.path.realpath(p, strict=True))
+        except (OSError, RuntimeError):
+            continue
+        if r.is_dir() and not P.motivo_sensivel(r) and str(r) not in validas:
+            validas.append(str(r))
+    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project", "--strict-mcp-config",
+           "--tools", FERRAMENTAS, "--permission-mode", "dontAsk", "--append-system-prompt", PROMPT]
     if sessao and all(c in "0123456789abcdef-" for c in sessao) and len(sessao) <= 64:
         cmd[2:2] = ["--resume", sessao]
+    for p in validas:
+        cmd += ["--add-dir", p]
+    cmd += ["--disallowedTools", *BLOQUEADOS, *[f"Read({_regra(str(s))}/**)" for s in P.sensiveis()]]
+    cmd += ["--allowedTools", *PERMITIDOS, *[f"Read({_regra(p)}/**)" for p in validas]]
     return cmd
 
 
@@ -66,6 +103,12 @@ def resumo_resultado(conteudo) -> str:
                 return f"{len(dados['quests'])} quests, {len(dados['rascunhos'])} rascunhos"
             if isinstance(dados, dict) and "dias" in dados:
                 return f"{sum(x['pomodoros'] for x in dados['dias'])} pomodoros em {len(dados['dias'])} dias"
+            if isinstance(dados, dict) and "itens" in dados:
+                return f"{len(dados['itens'])} itens em {dados['pasta']}"
+            if isinstance(dados, dict) and "arquivo" in dados:
+                return f"{dados['arquivo']} ({dados['tamanho']} bytes)" + ("" if dados.get("conteudo") is not None else ", só metadados")
+            if isinstance(dados, dict) and "pastas" in dados:
+                return f"{len(dados['pastas'])} pastas liberadas"
             return "ok"
     except ValueError:
         pass
@@ -108,16 +151,20 @@ class MestreClaude(_Base):
             return
         self._registrar("voce", texto)
         self._mudar("pensando")
-        threading.Thread(target=self._rodar, args=(expandir(texto),), daemon=True).start()
+        pastas: list[str] = []
+        if self.app is not None:  # lido aqui, na thread da interface (o banco não é dividido com a thread do claude)
+            from oma_rpg.nucleo import consultas
+            pastas = consultas.caminhos_liberados(self.app.b, self.app.agora())
+        threading.Thread(target=self._rodar, args=(expandir(texto), pastas), daemon=True).start()
 
-    def _rodar(self, prompt: str) -> None:
+    def _rodar(self, prompt: str, pastas: list[str] | None = None) -> None:
         from oma_rpg import caminhos
         pasta = self.pasta or caminhos.garantir(caminhos.pasta_dados() / "taverna")
         if self.app is not None and not self.sessao:
             self.sessao = self.app.estado.obter("taverna_sessao")
         pendentes: dict[str, str] = {}
         try:
-            self._proc = subprocess.Popen(comando_claude(self.exe, self.sessao), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            self._proc = subprocess.Popen(comando_claude(self.exe, self.sessao, pastas or []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                           stderr=subprocess.DEVNULL, cwd=str(pasta), env={**os.environ, "OMA_RPG_MESTRE": "1"},
                                           text=True, start_new_session=True)
             self._proc.stdin.write(prompt)

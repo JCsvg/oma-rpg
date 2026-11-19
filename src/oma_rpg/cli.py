@@ -10,9 +10,12 @@ oma-rpg quests [--arco X] [--json]                        quests e rascunhos
 oma-rpg history --days 30 [--json]                        pomodoros e commits por dia
 oma-rpg draft --titulo ... --materia ... --est 2 --dif 2 [--arco X] [--prazo AAAA-MM-DD] [--porque ...] [--json]
 oma-rpg editar ID [--titulo ...] [--est N] [--dif N] ... [--json]     edita um rascunho que ainda não foi aprovado
+oma-rpg pastas [--json]                                   as pastas que o JC liberou para o Mestre ler
+oma-rpg ls PASTA [-r] [--json]                            lista uma pasta liberada (só leitura)
+oma-rpg ver ARQUIVO [--texto] [--json]                    mostra um arquivo de pasta liberada (binário: só metadados)
 
 Resposta com --json: {"ok": true, "dados": ...} ou {"ok": false, "erro": "..."}.
-Nenhum subcomando aprova, conclui, compra ou muda XP, Bits, HP, nível ou skills: isso é só pela interface.
+Nenhum subcomando aprova, conclui, compra, libera pasta ou muda XP, Bits, HP, nível ou skills: isso é só pela interface.
 """
 
 from __future__ import annotations
@@ -24,7 +27,8 @@ import time
 
 from oma_rpg import __version__
 
-SUBCOMANDOS = ("servico", "serviço", "status", "quests", "history", "historico", "histórico", "draft", "rascunho", "editar")
+SUBCOMANDOS = ("servico", "serviço", "status", "quests", "history", "historico", "histórico", "draft", "rascunho", "editar",
+               "pastas", "ls", "ver")
 
 
 def _saida(ok: bool, dados, como_json: bool, texto: str = "") -> int:
@@ -166,6 +170,103 @@ def cmd_editar(a) -> int:
     return _saida(ok, r, a.json, t)
 
 
+def _liberadas() -> list[str]:
+    from oma_rpg.nucleo import consultas as C
+    b, _ = _leitura()
+    try:
+        return C.caminhos_liberados(b, time.time())
+    finally:
+        b.fechar()
+
+
+def _estado_pedido(pid: int) -> str:
+    b, _ = _leitura()
+    try:
+        r = b.um("SELECT estado FROM pedidos_pasta WHERE id = ?", (pid,))
+        return r[0] if r else "negado"
+    finally:
+        b.fechar()
+
+
+def _com_pasta(alvo: str, acao):
+    """Roda `acao(raizes)`. Fora das pastas liberadas, dentro da taverna (OMA_RPG_MESTRE=1), pede ao JC e espera a
+    resposta; fora da taverna, só explica como liberar."""
+    import os
+
+    from oma_rpg.nucleo.jogo import ErroJogo
+    try:
+        return acao(_liberadas())
+    except ErroJogo as e:
+        if str(e) != "fora das pastas liberadas":
+            raise
+    if os.environ.get("OMA_RPG_MESTRE") != "1":
+        raise ErroJogo("fora das pastas liberadas: o JC libera na taverna do oma-rpg (tecla P)")
+    ok, r = _pedir_mestre("pedir_pasta", {"caminho": alvo})
+    if not ok:
+        raise ErroJogo(str(r))
+    if r.get("liberada"):
+        return acao(_liberadas())
+    from oma_rpg.config import Config
+    fim = time.time() + Config.carregar()["mestre"]["espera_pedido_s"]
+    while time.time() < fim:
+        time.sleep(0.5)
+        estado = _estado_pedido(r["id"])
+        if estado == "liberado":
+            return acao(_liberadas())
+        if estado == "negado":
+            raise ErroJogo("o JC negou a leitura desta pasta")
+    raise ErroJogo("o JC não respondeu a tempo: peça para ele liberar a pasta na taverna (tecla P)")
+
+
+def _tamanho(n: int) -> str:
+    for unid in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unid == "GB":
+            return f"{n:.0f} {unid}" if unid == "B" else f"{n:.1f} {unid}".replace(".", ",")
+        n /= 1024
+    return str(n)
+
+
+def cmd_pastas(a) -> int:
+    from oma_rpg.nucleo import consultas as C
+    b, _ = _leitura()
+    try:
+        ps = C.pastas(b, time.time())
+    finally:
+        b.fechar()
+    linhas = [f"{p['caminho']}" + ("  (uma vez)" if p["modo"] == "uma_vez" else "") for p in ps]
+    return _saida(True, {"pastas": ps}, a.json, "\n".join(linhas) or "nenhuma pasta liberada (o JC libera na taverna, tecla P)")
+
+
+def cmd_ls(a) -> int:
+    from oma_rpg.nucleo import pastas
+    from oma_rpg.nucleo.jogo import ErroJogo
+    try:
+        d = _com_pasta(a.pasta, lambda raizes: pastas.listar(a.pasta, raizes, a.recursivo, a.fundo))
+    except ErroJogo as e:
+        return _saida(False, e, a.json)
+    linhas = [f"{i['nome']}/" if i["tipo"] == "pasta" else f"{i['nome']}  {_tamanho(i.get('tamanho', 0))}" if i["tipo"] == "arquivo"
+              else f"{i['nome']} (link{' para fora: negado' if i.get('fora') else ''})" for i in d["itens"]]
+    if d["ocultos"]:
+        linhas.append(f"({d['ocultos']} ocultos: arquivos com ponto ou com cara de segredo)")
+    if d["cortado"]:
+        linhas.append("(lista cortada)")
+    return _saida(True, d, a.json, "\n".join(linhas) or "pasta vazia")
+
+
+def cmd_ver(a) -> int:
+    from oma_rpg.nucleo import pastas
+    from oma_rpg.nucleo.jogo import ErroJogo
+    try:
+        d = _com_pasta(a.arquivo, lambda raizes: pastas.ver(a.arquivo, raizes, a.texto))
+    except ErroJogo as e:
+        return _saida(False, e, a.json)
+    if d.get("conteudo") is None:
+        t = f"{d['arquivo']}: {d['tipo']}, {_tamanho(d['tamanho'])}, modificado {d['modificado']} ({d.get('nota', '')})"
+    else:
+        t = d["conteudo"] + ("\n(cortado no limite de 200 KB)" if d.get("cortado") else "")
+    return _saida(True, d, a.json, t)
+
+
 def _parser_sub() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="oma-rpg", description="RPG de estudo: comandos para o Mestre (Claude Code) e a barra")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -205,6 +306,20 @@ def _parser_sub() -> argparse.ArgumentParser:
     e.add_argument("--porque")
     e.add_argument("--json", action="store_true")
     e.set_defaults(f=cmd_editar)
+    ps = sub.add_parser("pastas", help="as pastas que o JC liberou para o Mestre ler")
+    ps.add_argument("--json", action="store_true")
+    ps.set_defaults(f=cmd_pastas)
+    ls = sub.add_parser("ls", help="lista uma pasta liberada (só leitura)")
+    ls.add_argument("pasta")
+    ls.add_argument("-r", "--recursivo", action="store_true", help="entra nas subpastas")
+    ls.add_argument("--fundo", type=int, default=2, help="profundidade com -r (1 a 4)")
+    ls.add_argument("--json", action="store_true")
+    ls.set_defaults(f=cmd_ls)
+    v = sub.add_parser("ver", help="mostra um arquivo de pasta liberada (binário: só metadados)")
+    v.add_argument("arquivo")
+    v.add_argument("--texto", action="store_true", help="extrai o texto de um PDF (pdftotext)")
+    v.add_argument("--json", action="store_true")
+    v.set_defaults(f=cmd_ver)
     return p
 
 
