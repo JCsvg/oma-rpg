@@ -743,9 +743,10 @@ class Jogo:
         f = self._campos_quest(a, parcial=False)
         f["tipo"] = "normal"
         maximo = self._cfg("mestre", "max_rascunhos_por_dia")
-        ini = C.inicio_do_dia(self.hoje())
-        if int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE origem = 'mestre' AND criada >= ?", (ini,), 0)) >= maximo:
-            raise ErroJogo(f"limite de {maximo} rascunhos por dia")
+        if maximo > 0:
+            ini = C.inicio_do_dia(self.hoje())
+            if int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE origem = 'mestre' AND criada >= ?", (ini,), 0)) >= maximo:
+                raise ErroJogo(f"limite de {maximo} rascunhos por dia")
         cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, arco_nome, prazo, tipo, estado, origem, porque, ordem, "
                        "criada) VALUES (?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?)",
                        (f["titulo"], f["materia"], f["est"], f["dif"], f["arco_nome"], f["prazo"], f["porque"],

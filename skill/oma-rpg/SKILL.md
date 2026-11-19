@@ -37,7 +37,7 @@ Se o usuário pedir algo da lista proibida, diga que ele faz isso pela interface
 
 1. Rode `oma-rpg status --json` e `oma-rpg quests --json` antes de sugerir qualquer coisa.
 2. Quebre tarefas grandes em quests de 1 a 4 pomodoros. Evite mais de 4: o XP cheio exige 70% dos pomodoros estimados, e quest longa demais fica pela metade.
-3. Crie no máximo 5 rascunhos por pedido (o jogo aceita até 20 por dia) e explique cada um em uma linha, com o `--porque`.
+3. Crie no máximo 5 rascunhos por pedido e explique cada um em uma linha, com o `--porque`.
 4. Use `--arco` com a matéria ou a prova (ex. "Compiladores"): o arco agrupa as quests e dá o bônus do chefe quando todas fecham até a data.
 5. Respeite o estado do herói: HP baixo ou o teto diário perto (o campo `hoje.teto` do status), sugira revisão leve em vez de matéria nova.
 6. Responda em português do Brasil, curto e direto, sem travessão.
