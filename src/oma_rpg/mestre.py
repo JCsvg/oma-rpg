@@ -133,32 +133,34 @@ def comando_claude(exe: str, sessao: str | None = None, pastas: list[str] | tupl
 
 
 def comando_agente(agente: str, exe: str, sessao: str | None = None, pastas: list[str] | tuple = (),
-                   modelo: str = "") -> tuple[list[str], bool]:
-    """Monta (argv, precisa_prompt_no_stdin) para o agente escolhido."""
+                   modelo: str = "", entrada: str = "") -> tuple[list[str], bool]:
+    """Monta (argv, prompt_em_argv) para o agente escolhido."""
     if agente == "claude":
         return comando_claude(exe, sessao, pastas, modelo), False
     validas = _pastas_validas(pastas)
     sessao_ok = bool(sessao and all(c in "0123456789abcdef-" for c in sessao) and len(sessao) <= 64)
     if agente == "agy":
-        cmd = [exe, "-p", "--output-format", "stream-json", "--mode", "plan"]
+        cmd = [exe, "--output-format", "stream-json", "--mode", "plan"]
         if modelo:
             cmd += ["--model", modelo]
         if sessao_ok:
             cmd += ["--conversation", sessao]
         for p in validas:
             cmd += ["--add-dir", p]
-        return cmd, not sessao_ok
+        texto = entrada if sessao_ok else f"{PROMPT}\n\nPedido do JC:\n{entrada}"
+        cmd.append(f"--print={texto}")
+        return cmd, True
     if agente == "codex":
         cmd = [exe, "exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check"]
         if modelo:
             cmd += ["-m", modelo]
         cmd.append("-")
-        return cmd, True
+        return cmd, False
     if agente == "opencode":
         cmd = [exe, "run", "--format", "json"]
         if modelo:
             cmd += ["-m", modelo]
-        return cmd, True
+        return cmd, False
     return comando_claude(exe, sessao, pastas, modelo), False
 
 
@@ -279,38 +281,50 @@ class MestreClaude(_Base):
         if self.app is not None and not self.sessao:
             self.sessao = self.app.estado.obter("taverna_sessao")
         pendentes: dict[str, str] = {}
+        respondeu = False
         try:
-            argv, prefixar = comando_agente(self.agente, self.exe, self.sessao, pastas or [], self.modelo)
-            entrada = f"{PROMPT}\n\nPedido do JC:\n{prompt}" if prefixar else prompt
-            self._proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                          stderr=subprocess.DEVNULL, cwd=str(pasta), env={**os.environ, "OMA_RPG_MESTRE": "1"},
-                                          text=True, start_new_session=True)
-            self._proc.stdin.write(entrada)
-            self._proc.stdin.close()
+            entrada = prompt if (self.agente == "claude" or self.sessao) else f"{PROMPT}\n\nPedido do JC:\n{prompt}"
+            argv, em_argv = comando_agente(self.agente, self.exe, self.sessao, pastas or [], self.modelo, prompt)
+            self._proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL if em_argv else subprocess.PIPE,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=str(pasta),
+                                          env={**os.environ, "OMA_RPG_MESTRE": "1"}, text=True, start_new_session=True)
+            if not em_argv and self._proc.stdin is not None:
+                self._proc.stdin.write(entrada)
+                self._proc.stdin.close()
             for linha in self._proc.stdout:
                 try:
                     d = json.loads(linha)
                 except ValueError:
                     continue
-                self._tratar(d, pendentes)
-            self._proc.wait(timeout=10)
+                if self._tratar(d, pendentes):
+                    respondeu = True
+            rc = self._proc.wait(timeout=10)
+            err = (self._proc.stderr.read() if self._proc.stderr else "").strip()
+            if rc != 0 or not respondeu:
+                detalhe = err.splitlines()[-1][:240] if err else f"código {rc}"
+                self._registrar("sistema", f"O agente {self.agente} não respondeu ({detalhe}).")
         except (OSError, subprocess.SubprocessError) as e:
             self._registrar("sistema", f"O Mestre não respondeu ({type(e).__name__}).")
         finally:
             self._proc = None
             self.app._na_ui(self._mudar, "pronto") if self.app else None
 
-    def _tratar(self, d: dict, pendentes: dict[str, str]) -> None:
+    def _tratar(self, d: dict, pendentes: dict[str, str]) -> bool:
         tipo = d.get("type")
+        ev = d.get("event")
         sid = d.get("session_id") or d.get("conversation_id") or d.get("thread_id")
+        if not sid and isinstance(d.get("result"), dict):
+            sid = d["result"].get("conversation_id")
         if sid and sid != self.sessao:
             self.sessao = sid
             if self.app is not None:
                 self.app._na_ui(self.app.estado.definir, "taverna_sessao", self.sessao)
+        respondeu = False
         if tipo == "assistant":
             for c in (d.get("message") or {}).get("content") or []:
                 if c.get("type") == "text" and c.get("text", "").strip():
                     self._registrar("mestre", c["text"].strip())
+                    respondeu = True
                 elif c.get("type") == "tool_use":
                     cmd = str((c.get("input") or {}).get("command", c.get("name", "")))[:300]
                     pendentes[c.get("id", "")] = cmd
@@ -326,10 +340,18 @@ class MestreClaude(_Base):
             item = d.get("item") or {}
             if item.get("type") == "agent_message" and item.get("text", "").strip():
                 self._registrar("mestre", item["text"].strip())
+                respondeu = True
             elif item.get("type") == "command_execution":
                 cmd = str(item.get("command", ""))[:300]
                 res = resumo_resultado(item.get("aggregated_output"))
                 self._registrar("cli", cmd or "(comando)", {"resultado": res})
+        elif ev == "result":
+            res = d.get("result") or {}
+            txt = str(res.get("response") or "").strip()
+            if txt:
+                self._registrar("mestre", txt)
+                respondeu = True
+        return respondeu
 
     def parar(self) -> None:
         p = self._proc
