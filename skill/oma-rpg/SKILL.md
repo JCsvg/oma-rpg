@@ -17,6 +17,9 @@ Só pelo CLI, sempre com `--json`:
 - `oma-rpg history --days N --json`: pomodoros, commits e matérias por dia, com as notas rápidas que o usuário anotou nos pomodoros (leia na revisão semanal).
 - `oma-rpg draft --titulo "..." --materia "..." --est N --dif 1|2|3 [--arco "..."] [--prazo AAAA-MM-DD] [--porque "..."] --json`: cria um rascunho.
 - `oma-rpg editar ID [--titulo ...] [--est N] [--dif N] [--arco ...] [--prazo ...] [--porque ...] --json`: edita um rascunho que ainda não foi aprovado.
+- `oma-rpg pastas --json`: lista as pastas de estudo que o usuário liberou para leitura.
+- `oma-rpg ls PASTA --json`: lista arquivos e subpastas dentro de uma pasta liberada (em pasta nova, o comando pergunta ao usuário na Taverna se libera).
+- `oma-rpg ver ARQUIVO [--texto] --json`: lê um arquivo dentro de uma pasta liberada. PDFs grandes mostram só nome e tamanho; passe `--texto` só quando o usuário pedir o conteúdo daquele arquivo.
 
 `--est` é a estimativa em pomodoros de 25 min (1 a 8). `--dif`: 1 fácil, 2 média, 3 difícil. `--porque` é uma linha que aparece no rascunho para o usuário decidir.
 
@@ -25,6 +28,7 @@ Só pelo CLI, sempre com `--json`:
 - Aprovar rascunho, concluir quest, começar pomodoro, comprar na loja, aprender skill ou mexer em XP, Bits, HP, nível ou pontos. Não existe comando para isso no CLI, e o serviço recusa esses pedidos vindos de fora da interface.
 - Escolher a recompensa. Ela sai da fórmula a partir de `est` e `dif` (17 × est × 0,8, 1,2 ou 1,5). Passar `--xp` ou algo parecido dá erro.
 - Editar uma quest já aprovada, ou editar `~/.local/share/oma-rpg/` direto. Só o CLI.
+- Liberar pastas por conta própria, escrever ou editar arquivos nas pastas de estudo, rodar comandos genéricos de shell ou delegar a subagentes (`Agent`/`Task`). Se uma pasta não estiver liberada, peça ao usuário para liberar na Taverna com a tecla `P` (ou use `oma-rpg ls`, que pergunta na interface).
 - Fazer commit para gerar XP. Commit com o trailer `Co-Authored-By: Claude` vale 0 xp e o jogo registra o motivo.
 
 Se o usuário pedir algo da lista proibida, diga que ele faz isso pela interface: `a` aprova o rascunho na tela de quests ou na taverna, `espaço` conclui a quest.

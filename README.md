@@ -4,7 +4,7 @@ RPG de estudo em TUI (Python e Textual) para o Omarchy, no modelo do [herdr](htt
 
 Um serviço de usuário (`oma-rpg.service`) guarda o timer, observa os repositórios git que você registrar e avisa pelo mako quando o pomodoro e a pausa acabam. A janela é só um cliente: fechá-la não para o pomodoro. O Claude Code entra como o Mestre da taverna: ajuda a montar as quests, mas não dá XP.
 
-Versão 0.1.0.
+Versão 0.2.0.
 
 ## Capturas de tela
 
@@ -62,7 +62,7 @@ Dependências: `python` (3.13 ou mais novo) e `python-textual`. Opcionais: `git`
 ```bash
 cd packaging
 ./empacotar.sh                     # gera o pacote em packaging/ (faça commit antes)
-sudo pacman -U oma-rpg-0.1.0-1-any.pkg.tar.zst
+sudo pacman -U oma-rpg-0.2.0-1-any.pkg.tar.zst
 systemctl --user enable --now oma-rpg.service
 oma-rpg
 ```
@@ -101,6 +101,9 @@ oma-rpg quests [--arco X] --json       quests e rascunhos
 oma-rpg history --days 30 --json       pomodoros, commits e notas por dia
 oma-rpg draft --titulo "..." --materia "..." --est 2 --dif 2 [--arco X] [--prazo 2026-11-27] [--porque "..."] --json
 oma-rpg editar ID [--est N] [--dif N] ... --json   só rascunho ainda não aprovado
+oma-rpg pastas --json                  pastas de estudo liberadas para leitura
+oma-rpg ls PASTA --json                lista pasta liberada (ou pergunta na taverna)
+oma-rpg ver ARQUIVO [--texto] --json   lê arquivo em pasta liberada (PDF grande: só metadados sem --texto)
 ```
 
 Resposta: `{"ok": true, "dados": ...}` ou `{"ok": false, "erro": "..."}`. Um rascunho volta com `id`, `xp_previsto` e `bits_previstos`.
@@ -109,8 +112,8 @@ Resposta: `{"ok": true, "dados": ...}` ou `{"ok": false, "erro": "..."}`. Um ras
 |---|---|
 | ler status, quests e histórico | aprovar rascunho |
 | criar e editar rascunhos | concluir quest, começar pomodoro, comprar, aprender skill |
-| sugerir estimativa e dificuldade | alterar XP, Bits, HP, nível ou skills |
-| | escolher a recompensa |
+| ler pastas de estudo liberadas (`P` na taverna) | alterar XP, Bits, HP, nível, skills ou a lista de pastas |
+| sugerir estimativa e dificuldade | escrever arquivos, rodar shell genérico ou delegar a subagentes |
 
 O XP só nasce de pomodoro concluído no relógio do serviço e de commit visto no git. O CLI não tem nenhum subcomando que aprove, conclua ou dê XP, o serviço recusa esses pedidos de quem não tem a chave de jogador (só a interface tem), e commit com `Co-Authored-By: Claude` vale 0 xp. Detalhes em [DECISOES.md](DECISOES.md), seção 2.
 
@@ -131,7 +134,7 @@ A skill revisada está em [skill/oma-rpg/SKILL.md](skill/oma-rpg/SKILL.md).
 | `?` | ajuda completa |
 | `q` | sai (o serviço e o pomodoro continuam) |
 
-Por tela: painel `enter` abre, `f` foco, `n` nova quest, `t` taverna · foco `espaço` pausa ou começa, `1`-`4` skills, `x` abandona, `s` pula a pausa, `n` anota · quests `enter` edita, `n` nova, `espaço` conclui, `a` aprova rascunho, `d` descarta, `+` fila de hoje, `f` foco nela, `Shift+a` aprova todos · skills `enter` aprende, `r` respec, `c` classes · classes `enter` árvore, `t` vira esta classe, `esc` volta · loja `enter` compra ou equipa, `u` usa, `+` `-` quantidade · histórico `[` `]` período, `enter` detalhe · taverna `enter` envia, `Shift+Enter` quebra a linha, `/revisão` `/rascunhos` `/meta`.
+Por tela: painel `enter` abre, `f` foco, `n` nova quest, `t` taverna · foco `espaço` pausa ou começa, `1`-`4` skills, `x` abandona, `s` pula a pausa, `n` anota · quests `enter` edita, `n` nova, `espaço` conclui, `a` aprova rascunho, `d` descarta, `+` fila de hoje, `f` foco nela, `Shift+a` aprova todos · skills `enter` aprende, `r` respec, `c` classes · classes `enter` árvore, `t` vira esta classe, `esc` volta · loja `enter` compra ou equipa, `u` usa, `+` `-` quantidade · histórico `[` `]` período, `enter` detalhe · taverna `enter` envia, `Shift+Enter` quebra a linha, `p` pastas liberadas, `/revisão` `/rascunhos` `/meta`.
 
 O rodapé mostra até 5 teclas da janela em foco e o lembrete `ctrl+hjkl janelas · ctrl+espaço ajuda`; cada tecla do rodapé é clicável.
 

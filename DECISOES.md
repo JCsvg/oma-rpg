@@ -94,3 +94,10 @@ Medido com Textual 8.2.8, `VmRSS`: interface `--demo` em pty 180x48, 51,6 MB em 
 ## 9. Capturas
 
 Geradas pelo próprio Textual (`export_screenshot`) com o `--demo` e o relógio parado em 18/11/2026, convertidas com `rsvg-convert` (técnica do oma-mail). Script: `tests/manual/capturas.py`. Nenhuma captura da tela do JC.
+
+## 10. Pastas liberadas ao Mestre na 0.2.0 (pedido do JC; detalhes do agente)
+
+- **Lista controlada só pelo jogador.** As pastas liberadas ficam no banco e só aceitam alteração pela interface (com a chave de jogador), pela tecla `P` ou botão na Taverna, ou pelo diálogo de confirmação quando o Mestre pede uma pasta nova ("liberar uma vez", "liberar sempre" ou "negar"). O Mestre e o CLI sem chave não adicionam nem removem pastas.
+- **Caminhos sensíveis recusados.** Nunca podem ser liberados: `/`, `~`, `~/.ssh`, `~/.config`, `~/.local/share/oma-rpg` e a pasta de estado/chave em `$XDG_RUNTIME_DIR/oma-rpg`. A recusa acontece ao adicionar e de novo ao montar os argumentos do `claude`.
+- **Leitura validada pelo CLI.** Em vez de liberar `ls`/`find` genéricos no Bash, o Mestre usa `oma-rpg pastas`, `oma-rpg ls` e `oma-rpg ver`, que resolvem o caminho com `realpath` e recusam `..`, links simbólicos que apontem para fora da pasta liberada e arquivos secretos. PDFs grandes mostram só nome e tamanho, salvo quando `--texto` é pedido para um arquivo específico.
+- **Permissões no `claude -p`.** O processo da Taverna recebe `--add-dir` e `Read(//pasta/**)` só para as pastas liberadas, com `--disallowedTools` bloqueando `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `WebFetch`, `WebSearch`, `Agent`, `Task` e as pastas sensíveis.
