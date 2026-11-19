@@ -370,6 +370,16 @@ class Jogo:
             raise ErroJogo("quest não encontrada ou já fechada")
         return q
 
+    def _quest_desbloqueada(self, q) -> None:
+        deps = C.depende_de(q)
+        if not deps:
+            return
+        ph = ",".join("?" for _ in deps)
+        feitas = {int(r[0]) for r in self.b.todos(f"SELECT id FROM quests WHERE id IN ({ph}) AND estado = 'feita'", deps)}
+        faltam = [f"#{d}" for d in deps if d not in feitas]
+        if faltam:
+            raise ErroJogo(f"quest bloqueada: conclua {', '.join(faltam)} antes")
+
     def iniciar(self, quest_id=None) -> dict:
         h = self._h()
         a = self.atual()
@@ -381,7 +391,9 @@ class Jogo:
         pulou = a["fase"] in ("pausa", "longa") and C.restante(a, agora) > 0
         qid = None
         if quest_id not in (None, ""):
-            qid = self._quest_aberta(inteiro(quest_id, "quest", 1, 10**9))["id"]
+            q = self._quest_aberta(inteiro(quest_id, "quest", 1, 10**9))
+            self._quest_desbloqueada(q)
+            qid = q["id"]
         retomar = a["guardado_quest"] is not None or a["guardado_seg"] > 0
         if retomar and (qid is None or qid == a["guardado_quest"]):
             qid = a["guardado_quest"]
@@ -686,8 +698,18 @@ class Jogo:
             f["arco_nome"] = texto(a.get("arco"), "arco", 40)
         if not parcial or "prazo" in a:
             f["prazo"] = data_valida(a.get("prazo"))
-        if not parcial or "porque" in a:
-            f["porque"] = texto(a.get("porque"), "por quê", 300)
+        if not parcial or "descricao" in a or "desc" in a or "porque" in a:
+            bruto = a["descricao"] if "descricao" in a else (a["desc"] if "desc" in a else a.get("porque"))
+            f["porque"] = texto(bruto, "descrição", 800)
+        if not parcial or "prio" in a:
+            f["prio"] = inteiro(a.get("prio", 2) if a.get("prio") not in (None, "") else 2, "prioridade", 1, 3)
+        if not parcial or "depende_de" in a:
+            deps = a.get("depende_de", [])
+            if isinstance(deps, str):
+                deps = [x.strip() for x in deps.split(",") if x.strip()]
+            if not isinstance(deps, list) or len(deps) > 8:
+                raise ErroJogo("depende_de: lista de até 8 ids")
+            f["depende_de"] = json.dumps([inteiro(d, "depende_de", 1, 10**9) for d in deps])
         if "tipo" in a:
             if a["tipo"] not in ("normal", "daily"):
                 raise ErroJogo("tipo: normal ou daily")
@@ -730,10 +752,12 @@ class Jogo:
         hoje = 1 if a.get("hoje", True) else 0
         with self.b.transacao():
             arco = self._arco_id(f["arco_nome"])
-            cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, arco_id, arco_nome, prazo, tipo, estado, origem, porque, "
-                           "ordem, hoje, subtarefas, criada, aprovada) VALUES (?,?,?,?,?,?,?,?,'aberta','jogador',?,?,?,?,?,?)",
-                           (f["titulo"], f["materia"], f["est"], f["dif"], arco, f["arco_nome"], f["prazo"], f["tipo"],
-                            f["porque"], self._proxima_ordem(), hoje, f["subtarefas"], self.agora(), self.agora()))
+            cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, arco_id, arco_nome, prazo, tipo, "
+                           "estado, origem, porque, ordem, hoje, subtarefas, criada, aprovada) "
+                           "VALUES (?,?,?,?,?,?,?,?,?,?,'aberta','jogador',?,?,?,?,?,?)",
+                           (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], arco, f["arco_nome"],
+                            f["prazo"], f["tipo"], f["porque"], self._proxima_ordem(), hoje, f["subtarefas"],
+                            self.agora(), self.agora()))
         self.emitir({"evento": "quest", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
@@ -747,10 +771,10 @@ class Jogo:
             ini = C.inicio_do_dia(self.hoje())
             if int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE origem = 'mestre' AND criada >= ?", (ini,), 0)) >= maximo:
                 raise ErroJogo(f"limite de {maximo} rascunhos por dia")
-        cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, arco_nome, prazo, tipo, estado, origem, porque, ordem, "
-                       "criada) VALUES (?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?)",
-                       (f["titulo"], f["materia"], f["est"], f["dif"], f["arco_nome"], f["prazo"], f["porque"],
-                        self._proxima_ordem(), self.agora()))
+        cur = self.b.x("INSERT INTO quests (titulo, materia, est, dif, prio, depende_de, arco_nome, prazo, tipo, estado, "
+                       "origem, porque, ordem, criada) VALUES (?,?,?,?,?,?,?,?,'normal','rascunho','mestre',?,?,?)",
+                       (f["titulo"], f["materia"], f["est"], f["dif"], f["prio"], f["depende_de"], f["arco_nome"],
+                        f["prazo"], f["porque"], self._proxima_ordem(), self.agora()))
         self.emitir({"evento": "rascunho", "id": cur.lastrowid})
         return self._resumo_quest(cur.lastrowid)
 
@@ -832,6 +856,7 @@ class Jogo:
     def concluir_quest(self, id=None, nota="") -> dict:
         qid = inteiro(id, "id", 1, 10**9)
         q = self._quest_aberta(qid)
+        self._quest_desbloqueada(q)
         return self._concluir(q, texto(nota, "nota", 200))
 
     def _concluir(self, q, nota: str, ts: float | None = None) -> dict:

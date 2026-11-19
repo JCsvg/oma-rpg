@@ -148,11 +148,15 @@ def _pedir_mestre(cmd: str, args: dict):
 
 def _campos(a, parcial: bool) -> dict:
     d = {}
-    for k in ("titulo", "materia", "est", "dif", "arco", "prazo", "porque"):
+    for k in ("titulo", "materia", "est", "dif", "prio", "arco", "prazo", "porque"):
         v = getattr(a, k, None)
         if v is not None or not parcial:
             if v is not None:
                 d[k] = v
+    if getattr(a, "desc", None) is not None:
+        d["porque"] = a.desc
+    if getattr(a, "depende_de", None) is not None:
+        d["depende_de"] = a.depende_de
     return d
 
 
@@ -290,9 +294,12 @@ def _parser_sub() -> argparse.ArgumentParser:
         d.add_argument("--materia", default="")
         d.add_argument("--est", required=True, type=int, help="pomodoros de 25 min (1 a 8)")
         d.add_argument("--dif", required=True, help="1 fácil, 2 média, 3 difícil")
+        d.add_argument("--prio", type=int, help="prioridade: 1 baixa, 2 média, 3 alta")
         d.add_argument("--arco")
         d.add_argument("--prazo", help="AAAA-MM-DD")
-        d.add_argument("--porque", help="uma linha: por que esta quest")
+        d.add_argument("--desc", help="como resolver a tarefa (passo a passo)")
+        d.add_argument("--porque", help="atalho antigo para --desc")
+        d.add_argument("--depende-de", dest="depende_de", help="IDs de pré-requisitos separados por vírgula (ex: 18,19)")
         d.add_argument("--json", action="store_true")
         d.set_defaults(f=cmd_draft)
     e = sub.add_parser("editar", help="edita um rascunho ainda não aprovado")
@@ -301,9 +308,12 @@ def _parser_sub() -> argparse.ArgumentParser:
     e.add_argument("--materia")
     e.add_argument("--est", type=int)
     e.add_argument("--dif")
+    e.add_argument("--prio", type=int)
     e.add_argument("--arco")
     e.add_argument("--prazo")
+    e.add_argument("--desc")
     e.add_argument("--porque")
+    e.add_argument("--depende-de", dest="depende_de")
     e.add_argument("--json", action="store_true")
     e.set_defaults(f=cmd_editar)
     ps = sub.add_parser("pastas", help="as pastas que o JC liberou para o Mestre ler")

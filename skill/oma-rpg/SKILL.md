@@ -15,13 +15,13 @@ Só pelo CLI, sempre com `--json`:
 - `oma-rpg status --json`: herói (nível, XP, HP, mana, Bits, combo, streak), pomodoros de hoje, meta, teto diário e o pomodoro em andamento.
 - `oma-rpg quests [--arco "..."] --json`: quests abertas e feitas, e os rascunhos esperando aprovação.
 - `oma-rpg history --days N --json`: pomodoros, commits e matérias por dia, com as notas rápidas que o usuário anotou nos pomodoros (leia na revisão semanal).
-- `oma-rpg draft --titulo "..." --materia "..." --est N --dif 1|2|3 [--arco "..."] [--prazo AAAA-MM-DD] [--porque "..."] --json`: cria um rascunho.
-- `oma-rpg editar ID [--titulo ...] [--est N] [--dif N] [--arco ...] [--prazo ...] [--porque ...] --json`: edita um rascunho que ainda não foi aprovado.
+- `oma-rpg draft --titulo "..." --materia "..." --est N --dif 1|2|3 [--prio 1|2|3] [--arco "..."] [--prazo AAAA-MM-DD] [--depende-de ID1,ID2] [--desc "..."] --json`: cria um rascunho.
+- `oma-rpg editar ID [--titulo ...] [--est N] [--dif N] [--prio 1|2|3] [--arco ...] [--prazo ...] [--depende-de ...] [--desc "..."] --json`: edita um rascunho que ainda não foi aprovado.
 - `oma-rpg pastas --json`: lista as pastas de estudo que o usuário liberou para leitura.
 - `oma-rpg ls PASTA --json`: lista arquivos e subpastas dentro de uma pasta liberada (em pasta nova, o comando pergunta ao usuário na Taverna se libera).
 - `oma-rpg ver ARQUIVO [--texto] --json`: lê um arquivo dentro de uma pasta liberada. PDFs grandes mostram só nome e tamanho; passe `--texto` só quando o usuário pedir o conteúdo daquele arquivo.
 
-`--est` é a estimativa em pomodoros de 25 min (1 a 8). `--dif`: 1 fácil, 2 média, 3 difícil. `--porque` é uma linha que aparece no rascunho para o usuário decidir.
+`--est` é a estimativa em pomodoros de 25 min (1 a 8). `--dif`: 1 fácil, 2 média, 3 difícil. `--prio`: 1 baixa, 2 média, 3 alta. `--desc` deve explicar **como resolver a tarefa** (passo a passo objetivo, arquivos/exercícios/critério de pronto), e não uma dica vaga. `--depende-de` aceita IDs separados por vírgula para criar trilhas com ramos e convergências (um ramo que precisa de mais de uma trilha anterior para desbloquear).
 
 ## O que você NÃO pode fazer
 

@@ -196,12 +196,28 @@ def subtarefas(row) -> list[dict]:
         return []
 
 
+def depende_de(row) -> list[int]:
+    try:
+        v = json.loads((row["depende_de"] if "depende_de" in row.keys() else "[]") or "[]")
+        return [int(x) for x in v if isinstance(x, int) and x > 0][:8]
+    except (ValueError, TypeError):
+        return []
+
+
 def quest_dict(b, cfg, q, dia: str | None = None) -> dict:
     daily = q["tipo"] == "daily"
     feitos = quest_feitos(b, q["id"], dia if daily and dia else None)
     xp = regras.xp_quest(q["est"], q["dif"], cfg)
+    deps = depende_de(q)
+    faltam: list[int] = []
+    if deps:
+        ph = ",".join("?" for _ in deps)
+        feitas = {int(r[0]) for r in b.todos(f"SELECT id FROM quests WHERE id IN ({ph}) AND estado = 'feita'", deps)}
+        faltam = [d for d in deps if d not in feitas]
+    prio = int(q["prio"]) if "prio" in q.keys() and q["prio"] is not None else 2
     return {
         "id": q["id"], "titulo": q["titulo"], "materia": q["materia"], "est": q["est"], "dif": q["dif"],
+        "prio": prio, "depende_de": deps, "faltam_deps": faltam, "bloqueada": bool(faltam),
         "arco": q["arco_nome"], "arco_id": q["arco_id"], "prazo": q["prazo"], "tipo": q["tipo"], "estado": q["estado"],
         "origem": q["origem"], "porque": q["porque"], "feitos": feitos, "xp": xp, "bits": regras.bits_de(xp, cfg),
         "hoje": bool(q["hoje"]), "ordem": q["ordem"], "subtarefas": subtarefas(q), "nota": q["nota"],
@@ -222,7 +238,7 @@ def quests(b, cfg, dia: str, estado: str | None = None, arco: str | None = None)
     if arco:
         cond.append("lower(arco_nome) = lower(?)")
         args.append(arco)
-    sql += " WHERE " + " AND ".join(cond) + " ORDER BY estado = 'feita', ordem, id"
+    sql += " WHERE " + " AND ".join(cond) + " ORDER BY estado = 'feita', prio DESC, ordem, id"
     return [quest_dict(b, cfg, q, dia) for q in b.todos(sql, args)]
 
 

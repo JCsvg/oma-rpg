@@ -15,7 +15,7 @@ from __future__ import annotations
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.nucleo.jogo import ErroJogo
 
-CAMPOS_QUEST = {"titulo", "materia", "est", "dif", "arco", "prazo", "porque"}
+CAMPOS_QUEST = {"titulo", "materia", "est", "dif", "prio", "depende_de", "arco", "prazo", "porque", "desc", "descricao"}
 
 
 class ErroPapel(ErroJogo):

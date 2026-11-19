@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS quests (
   porque TEXT NOT NULL DEFAULT '', ordem INTEGER NOT NULL DEFAULT 0, hoje INTEGER NOT NULL DEFAULT 0,
   subtarefas TEXT NOT NULL DEFAULT '[]', nota TEXT NOT NULL DEFAULT '', criada REAL NOT NULL,
   aprovada REAL, concluida REAL, daily_feita TEXT NOT NULL DEFAULT '', daily_livre TEXT NOT NULL DEFAULT '',
-  xp_ganho INTEGER NOT NULL DEFAULT 0, reestimou INTEGER NOT NULL DEFAULT 0
+  xp_ganho INTEGER NOT NULL DEFAULT 0, reestimou INTEGER NOT NULL DEFAULT 0,
+  prio INTEGER NOT NULL DEFAULT 2, depende_de TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS quests_estado ON quests(estado);
 CREATE TABLE IF NOT EXISTS pomodoros (
@@ -112,6 +113,11 @@ class Banco:
             self.c.execute("PRAGMA synchronous = NORMAL")
             self.c.execute("PRAGMA cache_size = -1024")
             self.c.executescript(ESQUEMA)
+            cols = {r[1] for r in self.c.execute("PRAGMA table_info(quests)").fetchall()}
+            if "prio" not in cols:
+                self.c.execute("ALTER TABLE quests ADD COLUMN prio INTEGER NOT NULL DEFAULT 2")
+            if "depende_de" not in cols:
+                self.c.execute("ALTER TABLE quests ADD COLUMN depende_de TEXT NOT NULL DEFAULT '[]'")
             if self.meta("versao") is None:
                 self.definir_meta("versao", str(VERSAO))
             self.c.execute("INSERT OR IGNORE INTO atual (id) VALUES (1)")
