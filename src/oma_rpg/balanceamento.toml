@@ -1,0 +1,84 @@
+# Balanceamento do oma-rpg.
+#
+# Os números marcados "(design)" vêm do README de design. Os outros o design
+# deixou em aberto ("fica para a fase de balanceamento") e foram escolhidos
+# simples e conservadores; o motivo de cada um está em DECISOES.md.
+#
+# Para mudar: copie só as chaves que quiser para
+# ~/.config/oma-rpg/balanceamento.toml e reinicie o serviço
+# (systemctl --user restart oma-rpg.service). O que faltar lá vem daqui.
+# Vale também para as skills, as cartas e os itens de conteudo.toml, por
+# exemplo:  [skills.hotfix]  valor = 30
+
+[quest]
+xp_por_pomodoro = 17          # xp = round(17 × est × mult_dif)  (design)
+mult_facil = 0.8              # (design)
+mult_media = 1.2              # (design)
+mult_dificil = 1.5            # (design)
+bits_divisor = 4              # bits = round(xp / 4)  (design)
+xp_cheio_fracao = 0.7         # XP cheio exige 70% dos pomodoros estimados  (design)
+est_max = 8                   # quest com mais pomodoros que isso é recusada
+custo_reestimar_bits = 20     # mudar est ou dif depois do primeiro pomodoro; o Pergaminho zera
+chefe_pct = 50                # bônus do chefe do arco: 50% da soma do XP das quests do arco
+
+[pomodoro]
+minutos_foco = 25
+minutos_pausa_curta = 5       # (design)
+minutos_pausa_longa = 15      # (design)
+por_sessao = 4                # pausa longa depois do 4º  (design)
+xp_base = 24                  # "24 base x combo 1.3"  (design)
+abandono_livre_min = 5        # abandonar antes de 5 min não custa HP  (design)
+abandono_hp = 8               # (design)
+mp_pausa_curta = 6            # "mana ao fim +6"  (design)
+mp_pausa_longa = 12
+meta_diaria = 6               # "meta 3 de 6 pomodoros"  (design)
+teto_diario = 10              # depois disso é overtraining
+overtraining_mult = 0.5       # o XP do pomodoro cai pela metade
+max_pausado_min = 30          # pausado por mais que isso, o pomodoro é guardado sozinho (sem custo)
+
+[combo]
+passo = 0.1                   # x1.0, x1.1, x1.2 ...  (design)
+max = 1.5                     # (design)
+max_gamer = 2.0               # (design)
+gamer_intervalo_min = 45      # Gamer: o combo quebra se passar disso entre o fim de um pomodoro e o começo do outro
+
+[commit]
+xp_feat = 7                   # feat, fix, perf
+xp_test = 5                   # test, docs, refactor
+xp_outro = 4                  # mensagem sem tipo convencional
+xp_chore = 0                  # chore, style, ci, build, merge e revert não contam
+fator_solto = 0.3             # commit fora de pomodoro vinculado  (design)
+ci_verde_pct = 25             # Garoto de Programa: +25% no commit vinculado  (design)
+max_por_pomodoro = 5          # commits que contam por pomodoro
+max_por_dia = 20              # commits que contam por dia
+ignorar_coautor_claude = true # commit com "Co-Authored-By: Claude" não dá XP: o Mestre não dá XP
+
+[heroi]
+xp_nivel_base = 50            # XP para passar do nível n: 50 + 250 × n (nível 7 pede 1.800, como no design)
+xp_nivel_passo = 250
+hp_nivel = 10                 # subir de nível cura 10 de HP  (design)
+bits_nivel = 25               # (design)
+pontos_nivel = 1              # (design)
+hp_por_dia = 10               # a virada do dia cura 10 de HP (dormir)
+daily_hp = 8                  # daily vencida  (design)
+desmaio_bits_pct = 10         # (design)
+desmaio_volta_pct = 50        # acorda com 50% de HP  (design)
+streak_minimo = 1             # pomodoros num dia para contar no streak
+
+[mecanicas]
+juros_pct = 1.0               # Empreendedor: 1% dos Bits por dia de meta cumprida
+juros_max = 50                # no máximo 50 Bits por dia
+rato_hp_pausa = 3             # Rato de Academia: pausa respeitada cura 3 de HP
+otaku_virada_pct = 30         # Otaku: abaixo de 30% de HP vem a virada
+otaku_virada_mult = 2.0       # "virada: Otaku x2"  (design)
+otaku_chefe_pct = 50          # Otaku: chefe do arco vale +50%
+
+[loja]
+respec_skill_bits = 150       # "respec 150 bits"  (design): desfaz a última skill de um ramo
+trocar_classe_bits = 0        # trocar de classe só custa os pontos gastos  (design)
+caixa_bits_min = 20           # Bilhete de caixa
+caixa_bits_max = 120
+caixa_chance_cosmetico = 40   # em %
+
+[mestre]
+max_rascunhos_por_dia = 20    # o CLI recusa o 21º rascunho do dia

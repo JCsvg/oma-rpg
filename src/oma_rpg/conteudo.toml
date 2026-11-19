@@ -1,0 +1,321 @@
+# Conteúdo do oma-rpg: classes, skills, cartas do tarô, itens da loja e conquistas.
+#
+# Nomes, tipos e mecânicas das classes vêm do design. Só a árvore do Garoto de
+# Programa estava detalhada skill a skill (efeito, custo e requisito); os
+# números das outras cinco classes foram escolhidos aqui, no mesmo vocabulário
+# de efeitos, e podem ser mudados em ~/.config/oma-rpg/balanceamento.toml.
+#
+# Efeitos das passivas (valem enquanto a skill está aprendida):
+#   xp_pomodoro, xp_commit, xp_quest, bits    +valor% de XP ou de Bits
+#   solto                                     commit solto vale +valor pontos percentuais
+#   ci_verde                                  CI verde dá +valor pontos percentuais
+#   hp_max, mp_max                            +valor no máximo
+#   hp_pausa, mp_pausa                        pausa respeitada cura ou dá mana
+#   hp_dia                                    a virada do dia cura +valor
+#   teto                                      o teto diário sobe valor pomodoros
+#   combo_max                                 o combo vai valor mais longe
+#   custo_mana                                skills ativas custam valor% menos
+#   daily_hp, abandono_hp                     a penalidade cai valor%
+#   backup                                    no desmaio, guarda o streak de ontem
+#   juros, chefe, virada                      reforçam a mecânica da classe
+# Efeitos das ativas (gastam mana, uma vez por dia cada):
+#   guardar        guarda o pomodoro em andamento sem custo e sem perder o combo
+#   proximo_xp     o próximo pomodoro concluído vale +valor%
+#   arriscar       o próximo pomodoro vale +valor%, mas abandonar custa o dobro
+#   sorte          o próximo pomodoro vale de 0,5x a 2x, sorteado na hora
+#   torre          zera o combo e o próximo pomodoro vale +valor%
+#   escudo         ignora a próxima perda de HP
+#   desfazer_hp    devolve a última perda de HP
+#   cura           +valor de HP
+#   mana_hp        troca a mana gasta pelo mesmo tanto de HP
+#   descartar      dispensa a próxima daily pendente de hoje, sem penalidade
+#   combo_mais     o combo sobe valor degraus agora
+#   commit_mais    os commits do pomodoro em andamento valem +valor%
+#   carta          tira outra carta do dia (Jovem Místico)
+
+[classes.mistico]
+ordem = 1
+nome = "Jovem Místico"
+sigla = "JM"
+icone = "mistico"
+cor = "magenta"
+tema = "cartas de tarô, sorte e intuição"
+poder = "tiragem diária"
+poder_titulo = "Tiragem diária"
+poder_txt = "Toda manhã uma carta sorteada dá um buff e um debuff ao dia."
+hp = 80
+mp = 80
+ramos = ["Arcanos da Mente", "Arcanos do Destino", "Arcanos do Corpo"]
+titulos = ["Aprendiz", "Leitor de Cartas", "Vidente", "Oráculo", "Arcano", "Mestre do Tarô"]
+dia = [
+  "Carta de hoje: A Estrela, +15% de Bits. O debuff vem de A Torre: dailies vencidas custam o dobro de HP.",
+  "O Louco sorteia o XP do próximo pomodoro: sai de 0,5x a 2x.",
+  "A Temperança troca mana por HP quando o dia está pesado.",
+]
+
+[classes.programa]
+ordem = 2
+nome = "Garoto de Programa"
+sigla = "GP"
+icone = "programa"
+cor = "blue"
+tema = "TI, jargão e linha de comando"
+poder = "ci verde"
+poder_titulo = "CI verde"
+poder_txt = "Commits feitos dentro de um pomodoro vinculado valem mais XP."
+hp = 100
+mp = 60
+ramos = ["Backend", "DevOps", "Hack"]
+titulos = ["Estagiário", "Dev Júnior", "Dev Pleno", "Dev Sênior", "Tech Lead", "Staff"]
+dia = [
+  "Commit dentro de um pomodoro vinculado vale +25% de XP (CI verde).",
+  "git stash guarda o pomodoro quando a reunião aparece do nada.",
+  "sudo segura a próxima perda de HP.",
+]
+
+[classes.empreendedor]
+ordem = 3
+nome = "Empreendedor"
+sigla = "EM"
+icone = "empreendedor"
+cor = "yellow"
+tema = "negócios e mercado financeiro"
+poder = "carteira"
+poder_titulo = "Carteira"
+poder_txt = "Bits guardados rendem juros todo dia em que você cumpre a meta."
+hp = 90
+mp = 70
+ramos = ["Capital", "Mercado", "Operação"]
+titulos = ["Estagiário de Vendas", "Microempreendedor", "Sócio", "CEO", "Investidor-Anjo", "Magnata"]
+dia = [
+  "Cumpriu a meta: à meia-noite os Bits rendem 1% (até 50).",
+  "Day trade aposta mana em XP no próximo pomodoro.",
+  "Stop loss deixa o abandono mais barato.",
+]
+
+[classes.rato]
+ordem = 4
+nome = "Rato de Academia"
+sigla = "RA"
+icone = "rato"
+cor = "orange"
+tema = "treino, descanso e progressão"
+poder = "fadiga"
+poder_titulo = "Fadiga"
+poder_txt = "Pausa bem feita dá bônus; passar do teto diário vira overtraining."
+hp = 120
+mp = 40
+ramos = ["Treino", "Recuperação", "Dieta"]
+titulos = ["Frango", "Marombeiro", "Shape em Construção", "Monstro", "Fisiculturista", "Lenda do Supino"]
+dia = [
+  "Pausa respeitada cura 3 de HP.",
+  "Depois do 10º pomodoro do dia é overtraining: o XP cai pela metade.",
+  "Sono cura mais na virada do dia.",
+]
+
+[classes.gamer]
+ordem = 5
+nome = "Gamer"
+sigla = "GM"
+icone = "gamer"
+cor = "green"
+tema = "combos, troféus e speedrun"
+poder = "combo"
+poder_titulo = "Combo"
+poder_txt = "O combo vai mais longe: sobe até x2.0 (as outras classes param em x1.5)."
+hp = 100
+mp = 60
+ramos = ["Speedrun", "Hardcore", "Grind"]
+titulos = ["Noob", "Casual", "Tryhard", "Pro Player", "Speedrunner", "Lenda"]
+dia = [
+  "O combo sobe até x2.0, mas quebra se passar 45 min entre um pomodoro e outro.",
+  "Respawn devolve a última perda de HP.",
+  "Loot Box sorteia o XP do próximo pomodoro.",
+]
+
+[classes.otaku]
+ordem = 6
+nome = "Otaku"
+sigla = "OT"
+icone = "otaku"
+cor = "cyan"
+tema = "arcos, episódios e viradas"
+poder = "arcos"
+poder_titulo = "Arcos"
+poder_txt = "Cada matéria é um arco com episódios e chefe; com HP baixo vem a virada."
+hp = 90
+mp = 70
+ramos = ["Shounen", "Slice of Life", "Drama"]
+titulos = ["Novato", "Fã", "Weeb", "Senpai", "Sensei", "Protagonista"]
+dia = [
+  "Com menos de 30% de HP vem a virada: o pomodoro vale x2.",
+  "O chefe do arco vale +50% para o Otaku.",
+  "Slice of Life cura nas pausas.",
+]
+
+# ---------------------------------------------------------------- skills
+# ramo 0, 1, 2 na ordem de `ramos`; pos 0 a 4 de cima para baixo. A pos 4 custa 2 pontos.
+[skills]
+# Garoto de Programa (detalhada no design)
+git_stash = { classe = "programa", ramo = 0, pos = 0, nome = "git stash", tipo = "ativa", mp = 6, efeito = "guardar", valor = 0, desc = "guarda este pomodoro sem perder o combo", frase = "Volta depois com git stash pop." }
+hotfix = { classe = "programa", ramo = 0, pos = 1, nome = "hotfix", tipo = "ativa", mp = 4, efeito = "proximo_xp", valor = 40, desc = "quest urgente vale +40% de XP", frase = "Direto em produção." }
+cache_hit = { classe = "programa", ramo = 0, pos = 2, nome = "cache hit", tipo = "passiva", efeito = "xp_quest", valor = 10, desc = "quests concluídas valem +10% de XP", frase = "Já estava na memória." }
+multithread = { classe = "programa", ramo = 0, pos = 3, nome = "multithread", tipo = "passiva", efeito = "solto", valor = 20, desc = "commit solto vale 50% em vez de 30%", frase = "Duas coisas ao mesmo tempo, com cuidado." }
+escala_horizontal = { classe = "programa", ramo = 0, pos = 4, nome = "escala horizontal", tipo = "passiva", efeito = "teto", valor = 2, desc = "o teto diário sobe 2 pomodoros", frase = "Mais máquinas, mesma carga por máquina." }
+sudo = { classe = "programa", ramo = 1, pos = 0, nome = "sudo", tipo = "ativa", mp = 8, efeito = "escudo", valor = 0, desc = "ignora a próxima penalidade de HP", frase = "Com grandes poderes vêm grandes responsabilidades." }
+backup = { classe = "programa", ramo = 1, pos = 1, nome = "backup", tipo = "passiva", efeito = "backup", valor = 0, desc = "no desmaio, o streak de ontem fica guardado", frase = "Regra 3-2-1." }
+rollback = { classe = "programa", ramo = 1, pos = 2, nome = "rollback", tipo = "ativa", mp = 10, efeito = "desfazer_hp", valor = 0, desc = "Desfaz a última perda de HP.", uso = "uso: 10 mana; vale para abandono ou daily vencida", frase = "git revert na própria vida." }
+ci_verde = { classe = "programa", ramo = 1, pos = 3, nome = "CI verde", tipo = "passiva", efeito = "ci_verde", valor = 25, desc = "o CI verde dá +50% em vez de +25%", frase = "Todos os checks passaram." }
+alta_disponibilidade = { classe = "programa", ramo = 1, pos = 4, nome = "alta disponibilidade", tipo = "passiva", efeito = "hp_max", valor = 20, desc = "+20 de HP máximo", frase = "Cinco noves." }
+dev_null = { classe = "programa", ramo = 2, pos = 0, nome = "/dev/null", tipo = "ativa", mp = 5, efeito = "descartar", valor = 0, desc = "descarta uma quest sem penalidade", uso = "dispensa a próxima daily pendente de hoje", frase = "Some sem deixar rastro." }
+brute_force = { classe = "programa", ramo = 2, pos = 1, nome = "brute force", tipo = "passiva", efeito = "xp_commit", valor = 20, desc = "commits valem +20% de XP", frase = "Uma hora acerta." }
+fork_bomb = { classe = "programa", ramo = 2, pos = 2, nome = "fork bomb", tipo = "ativa", mp = 12, efeito = "combo_mais", valor = 2, desc = "o combo sobe dois degraus agora", frase = ":(){ :|:& };:" }
+deploy_na_sexta = { classe = "programa", ramo = 2, pos = 3, nome = "deploy na sexta", tipo = "ativa", mp = 15, efeito = "arriscar", valor = 60, desc = "o próximo pomodoro vale +60%, mas abandonar custa o dobro de HP", frase = "O que pode dar errado?" }
+root = { classe = "programa", ramo = 2, pos = 4, nome = "root", tipo = "passiva", efeito = "custo_mana", valor = 25, desc = "skills ativas custam 25% menos mana", frase = "# whoami" }
+
+# Jovem Místico
+o_mago = { classe = "mistico", ramo = 0, pos = 0, nome = "O Mago", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 25, desc = "o próximo pomodoro vale +25% de XP", frase = "Tudo o que precisa já está na mesa." }
+a_sacerdotisa = { classe = "mistico", ramo = 0, pos = 1, nome = "A Sacerdotisa", tipo = "passiva", efeito = "mp_pausa", valor = 2, desc = "pausa respeitada dá +2 de mana", frase = "O silêncio também ensina." }
+o_eremita = { classe = "mistico", ramo = 0, pos = 2, nome = "O Eremita", tipo = "ativa", mp = 10, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "Uma lanterna basta." }
+o_hierofante = { classe = "mistico", ramo = 0, pos = 3, nome = "O Hierofante", tipo = "passiva", efeito = "xp_quest", valor = 10, desc = "quests concluídas valem +10% de XP", frase = "A tradição tem seus motivos." }
+o_mundo = { classe = "mistico", ramo = 0, pos = 4, nome = "O Mundo", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "O ciclo se fecha." }
+o_louco = { classe = "mistico", ramo = 1, pos = 0, nome = "O Louco", tipo = "ativa", mp = 5, efeito = "sorte", valor = 0, desc = "o próximo pomodoro vale de 0,5x a 2x", frase = "Um passo no vazio." }
+roda_da_fortuna = { classe = "mistico", ramo = 1, pos = 1, nome = "Roda da Fortuna", tipo = "ativa", mp = 8, efeito = "carta", valor = 0, desc = "tira outra carta do dia", frase = "Gira de novo." }
+a_justica = { classe = "mistico", ramo = 1, pos = 2, nome = "A Justiça", tipo = "passiva", efeito = "daily_hp", valor = 50, desc = "daily vencida custa metade do HP", frase = "Cada um paga o que deve, e só." }
+a_torre = { classe = "mistico", ramo = 1, pos = 3, nome = "A Torre", tipo = "ativa", mp = 12, efeito = "torre", valor = 50, desc = "zera o combo e o próximo pomodoro vale +50%", frase = "Derruba para construir de novo." }
+a_estrela = { classe = "mistico", ramo = 1, pos = 4, nome = "A Estrela", tipo = "passiva", efeito = "bits", valor = 15, desc = "+15% de Bits em toda quest", frase = "Depois da tempestade." }
+a_imperatriz = { classe = "mistico", ramo = 2, pos = 0, nome = "A Imperatriz", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura 2 de HP", frase = "Cuidar também é trabalho." }
+a_temperanca = { classe = "mistico", ramo = 2, pos = 1, nome = "A Temperança", tipo = "ativa", mp = 15, efeito = "mana_hp", valor = 15, desc = "troca 15 de mana por 15 de HP", frase = "Nem tanto ao céu, nem tanto à terra." }
+o_enforcado = { classe = "mistico", ramo = 2, pos = 2, nome = "O Enforcado", tipo = "ativa", mp = 8, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Parar também é um movimento." }
+a_morte = { classe = "mistico", ramo = 2, pos = 3, nome = "A Morte", tipo = "ativa", mp = 12, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Fim de um ciclo, não de você." }
+o_sol = { classe = "mistico", ramo = 2, pos = 4, nome = "O Sol", tipo = "passiva", efeito = "hp_max", valor = 20, desc = "+20 de HP máximo", frase = "Tudo claro." }
+
+# Empreendedor
+poupanca = { classe = "empreendedor", ramo = 0, pos = 0, nome = "Poupança", tipo = "passiva", efeito = "juros", valor = 0.5, desc = "os juros sobem 0,5 ponto", frase = "Pouco a pouco." }
+juros_compostos = { classe = "empreendedor", ramo = 0, pos = 1, nome = "Juros compostos", tipo = "passiva", efeito = "juros_max", valor = 50, desc = "o teto dos juros sobe 50 Bits", frase = "A oitava maravilha." }
+dividendos = { classe = "empreendedor", ramo = 0, pos = 2, nome = "Dividendos", tipo = "passiva", efeito = "bits", valor = 10, desc = "+10% de Bits", frase = "Pingando todo mês." }
+diversificar = { classe = "empreendedor", ramo = 0, pos = 3, nome = "Diversificar", tipo = "passiva", efeito = "mp_max", valor = 10, desc = "+10 de mana máxima", frase = "Nem tudo na mesma cesta." }
+holding = { classe = "empreendedor", ramo = 0, pos = 4, nome = "Holding", tipo = "passiva", efeito = "bits", valor = 20, desc = "+20% de Bits", frase = "Empresa de empresas." }
+day_trade = { classe = "empreendedor", ramo = 1, pos = 0, nome = "Day trade", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 30, desc = "o próximo pomodoro vale +30% de XP", frase = "Compra na baixa." }
+alavancagem = { classe = "empreendedor", ramo = 1, pos = 1, nome = "Alavancagem", tipo = "ativa", mp = 10, efeito = "arriscar", valor = 60, desc = "o próximo pomodoro vale +60%, mas abandonar custa o dobro", frase = "Ganha muito ou perde muito." }
+stop_loss = { classe = "empreendedor", ramo = 1, pos = 2, nome = "Stop loss", tipo = "passiva", efeito = "abandono_hp", valor = 50, desc = "abandonar custa metade do HP", frase = "Sai antes de piorar." }
+hedge = { classe = "empreendedor", ramo = 1, pos = 3, nome = "Hedge", tipo = "passiva", efeito = "daily_hp", valor = 50, desc = "daily vencida custa metade do HP", frase = "Proteção contra o pior dia." }
+ipo = { classe = "empreendedor", ramo = 1, pos = 4, nome = "IPO", tipo = "ativa", mp = 20, efeito = "combo_mais", valor = 3, desc = "o combo sobe três degraus agora", frase = "Toca o sino." }
+pitch = { classe = "empreendedor", ramo = 2, pos = 0, nome = "Pitch", tipo = "ativa", mp = 6, efeito = "commit_mais", valor = 50, desc = "os commits deste pomodoro valem +50%", frase = "Três minutos para convencer." }
+mvp = { classe = "empreendedor", ramo = 2, pos = 1, nome = "MVP", tipo = "ativa", mp = 8, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Feito é melhor que perfeito." }
+pivotar = { classe = "empreendedor", ramo = 2, pos = 2, nome = "Pivotar", tipo = "ativa", mp = 12, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Muda o rumo sem afundar." }
+networking = { classe = "empreendedor", ramo = 2, pos = 3, nome = "Networking", tipo = "passiva", efeito = "xp_commit", valor = 15, desc = "commits valem +15% de XP", frase = "Quem indica." }
+escalar = { classe = "empreendedor", ramo = 2, pos = 4, nome = "Escalar", tipo = "passiva", efeito = "teto", valor = 2, desc = "o teto diário sobe 2 pomodoros", frase = "Do zero ao milhão." }
+
+# Rato de Academia
+aquecimento = { classe = "rato", ramo = 0, pos = 0, nome = "Aquecimento", tipo = "passiva", efeito = "xp_pomodoro", valor = 5, desc = "pomodoros valem +5% de XP", frase = "Cinco minutos de esteira." }
+progressao_de_carga = { classe = "rato", ramo = 0, pos = 1, nome = "Progressão de carga", tipo = "passiva", efeito = "combo_max", valor = 0.1, desc = "o combo vai até x1.6", frase = "Um quilo a mais por semana." }
+superset = { classe = "rato", ramo = 0, pos = 2, nome = "Superset", tipo = "ativa", mp = 6, efeito = "proximo_xp", valor = 30, desc = "o próximo pomodoro vale +30% de XP", frase = "Sem descanso entre as séries." }
+falha_concentrada = { classe = "rato", ramo = 0, pos = 3, nome = "Falha concentrada", tipo = "ativa", mp = 10, efeito = "arriscar", valor = 60, desc = "o próximo pomodoro vale +60%, mas abandonar custa o dobro", frase = "Até a última repetição." }
+pr = { classe = "rato", ramo = 0, pos = 4, nome = "PR", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "Recorde pessoal." }
+dia_de_descanso = { classe = "rato", ramo = 1, pos = 0, nome = "Dia de descanso", tipo = "ativa", mp = 8, efeito = "cura", valor = 20, desc = "+20 de HP", frase = "O músculo cresce no descanso." }
+alongamento = { classe = "rato", ramo = 1, pos = 1, nome = "Alongamento", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura mais 2 de HP", frase = "Dez segundos de cada lado." }
+sono = { classe = "rato", ramo = 1, pos = 2, nome = "Sono", tipo = "passiva", efeito = "hp_dia", valor = 10, desc = "a virada do dia cura mais 10 de HP", frase = "Oito horas." }
+massagem = { classe = "rato", ramo = 1, pos = 3, nome = "Massagem", tipo = "ativa", mp = 12, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Tira o nó." }
+supercompensacao = { classe = "rato", ramo = 1, pos = 4, nome = "Supercompensação", tipo = "passiva", efeito = "mp_max", valor = 20, desc = "+20 de mana máxima", frase = "Volta mais forte." }
+proteina = { classe = "rato", ramo = 2, pos = 0, nome = "Proteína", tipo = "ativa", mp = 6, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "30 gramas por refeição." }
+creatina = { classe = "rato", ramo = 2, pos = 1, nome = "Creatina", tipo = "passiva", efeito = "mp_pausa", valor = 2, desc = "pausa respeitada dá +2 de mana", frase = "Todo dia, sem ciclar." }
+hidratacao = { classe = "rato", ramo = 2, pos = 2, nome = "Hidratação", tipo = "passiva", efeito = "mp_max", valor = 10, desc = "+10 de mana máxima", frase = "Dois litros." }
+cutting = { classe = "rato", ramo = 2, pos = 3, nome = "Cutting", tipo = "ativa", mp = 10, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Corta o que sobra." }
+bulking = { classe = "rato", ramo = 2, pos = 4, nome = "Bulking", tipo = "passiva", efeito = "hp_max", valor = 20, desc = "+20 de HP máximo", frase = "Come de tudo." }
+
+# Gamer
+skip_de_tutorial = { classe = "gamer", ramo = 0, pos = 0, nome = "Skip de Tutorial", tipo = "ativa", mp = 5, efeito = "proximo_xp", valor = 25, desc = "o próximo pomodoro vale +25% de XP", frase = "Já sei jogar." }
+glitch = { classe = "gamer", ramo = 0, pos = 1, nome = "Glitch", tipo = "ativa", mp = 8, efeito = "escudo", valor = 0, desc = "ignora a próxima perda de HP", frase = "Atravessou a parede." }
+any_pct = { classe = "gamer", ramo = 0, pos = 2, nome = "Any%", tipo = "passiva", efeito = "xp_pomodoro", valor = 5, desc = "pomodoros valem +5% de XP", frase = "Vale qualquer caminho." }
+frame_perfect = { classe = "gamer", ramo = 0, pos = 3, nome = "Frame Perfect", tipo = "passiva", efeito = "combo_max", valor = 0.1, desc = "o combo vai até x2.1", frase = "Um sexagésimo de segundo." }
+world_record = { classe = "gamer", ramo = 0, pos = 4, nome = "World Record", tipo = "passiva", efeito = "xp_pomodoro", valor = 10, desc = "pomodoros valem +10% de XP", frase = "Topo do leaderboard." }
+checkpoint = { classe = "gamer", ramo = 1, pos = 0, nome = "Checkpoint", tipo = "passiva", efeito = "backup", valor = 0, desc = "no desmaio, o streak de ontem fica guardado", frase = "Salvou aqui." }
+respawn = { classe = "gamer", ramo = 1, pos = 1, nome = "Respawn", tipo = "ativa", mp = 10, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Volta do último save." }
+modo_hardcore = { classe = "gamer", ramo = 1, pos = 2, nome = "Modo Hardcore", tipo = "ativa", mp = 12, efeito = "arriscar", valor = 80, desc = "o próximo pomodoro vale +80%, mas abandonar custa o dobro", frase = "Uma vida só." }
+armadura = { classe = "gamer", ramo = 1, pos = 3, nome = "Armadura", tipo = "passiva", efeito = "abandono_hp", valor = 50, desc = "abandonar custa metade do HP", frase = "+10 de defesa." }
+pause_menu = { classe = "gamer", ramo = 1, pos = 4, nome = "Pause Menu", tipo = "ativa", mp = 15, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "O mundo espera." }
+farmar = { classe = "gamer", ramo = 2, pos = 0, nome = "Farmar", tipo = "passiva", efeito = "xp_commit", valor = 10, desc = "commits valem +10% de XP", frase = "Mais uma volta no mapa." }
+drop_raro = { classe = "gamer", ramo = 2, pos = 1, nome = "Drop Raro", tipo = "passiva", efeito = "bits", valor = 10, desc = "+10% de Bits", frase = "Caiu o lendário." }
+loot_box = { classe = "gamer", ramo = 2, pos = 2, nome = "Loot Box", tipo = "ativa", mp = 8, efeito = "sorte", valor = 0, desc = "o próximo pomodoro vale de 0,5x a 2x", frase = "Abre a caixa." }
+ng_mais = { classe = "gamer", ramo = 2, pos = 3, nome = "NG+", tipo = "passiva", efeito = "xp_quest", valor = 10, desc = "quests concluídas valem +10% de XP", frase = "De novo, mais difícil." }
+platina = { classe = "gamer", ramo = 2, pos = 4, nome = "Platina", tipo = "passiva", efeito = "teto", valor = 2, desc = "o teto diário sobe 2 pomodoros", frase = "Cem por cento." }
+
+# Otaku
+arco_de_treino = { classe = "otaku", ramo = 0, pos = 0, nome = "Arco de Treino", tipo = "passiva", efeito = "xp_pomodoro", valor = 5, desc = "pomodoros valem +5% de XP", frase = "Montanha com peso nas costas." }
+power_up = { classe = "otaku", ramo = 0, pos = 1, nome = "Power Up", tipo = "ativa", mp = 8, efeito = "combo_mais", valor = 2, desc = "o combo sobe dois degraus agora", frase = "Ainda não é tudo." }
+transformacao = { classe = "otaku", ramo = 0, pos = 2, nome = "Transformação", tipo = "ativa", mp = 12, efeito = "proximo_xp", valor = 40, desc = "o próximo pomodoro vale +40% de XP", frase = "O cabelo mudou de cor." }
+poder_da_amizade = { classe = "otaku", ramo = 0, pos = 3, nome = "Poder da Amizade", tipo = "passiva", efeito = "xp_commit", valor = 10, desc = "commits valem +10% de XP", frase = "Ninguém luta sozinho." }
+forma_final = { classe = "otaku", ramo = 0, pos = 4, nome = "Forma Final", tipo = "passiva", efeito = "virada", valor = 50, desc = "a virada vale x2,5", frase = "Este é o meu verdadeiro poder." }
+slice_of_life = { classe = "otaku", ramo = 1, pos = 0, nome = "Slice of Life", tipo = "passiva", efeito = "hp_pausa", valor = 2, desc = "pausa respeitada cura 2 de HP", frase = "Chá depois da aula." }
+filler = { classe = "otaku", ramo = 1, pos = 1, nome = "Filler", tipo = "passiva", efeito = "mp_pausa", valor = 2, desc = "pausa respeitada dá +2 de mana", frase = "Episódio de praia." }
+recap = { classe = "otaku", ramo = 1, pos = 2, nome = "Recap", tipo = "ativa", mp = 10, efeito = "desfazer_hp", valor = 0, desc = "devolve a última perda de HP", frase = "Anteriormente..." }
+hiato = { classe = "otaku", ramo = 1, pos = 3, nome = "Hiato", tipo = "ativa", mp = 10, efeito = "guardar", valor = 0, desc = "guarda o pomodoro sem perder o combo", frase = "Volta na próxima temporada." }
+temporada_2 = { classe = "otaku", ramo = 1, pos = 4, nome = "Temporada 2", tipo = "passiva", efeito = "backup", valor = 0, desc = "no desmaio, o streak de ontem fica guardado", frase = "Renovado." }
+plot_armor = { classe = "otaku", ramo = 2, pos = 0, nome = "Plot Armor", tipo = "passiva", efeito = "daily_hp", valor = 50, desc = "daily vencida custa metade do HP", frase = "O protagonista não morre." }
+flashback = { classe = "otaku", ramo = 2, pos = 1, nome = "Flashback", tipo = "ativa", mp = 8, efeito = "cura", valor = 20, desc = "+20 de HP", frase = "Lembra do treino." }
+cliffhanger = { classe = "otaku", ramo = 2, pos = 2, nome = "Cliffhanger", tipo = "passiva", efeito = "chefe", valor = 25, desc = "o chefe do arco vale +25%", frase = "Continua..." }
+momento_de_virada = { classe = "otaku", ramo = 2, pos = 3, nome = "Momento de Virada", tipo = "passiva", efeito = "virada_limite", valor = 10, desc = "a virada começa com 40% de HP", frase = "Agora é sério." }
+deus_ex_machina = { classe = "otaku", ramo = 2, pos = 4, nome = "Deus Ex Machina", tipo = "ativa", mp = 30, efeito = "cura", valor = 999, desc = "cura toda a vida", frase = "Do nada, a salvação." }
+
+# ---------------------------------------------------------------- cartas do Jovem Místico
+# Toda manhã sai um buff e um debuff. O efeito usa o mesmo vocabulário das passivas.
+[cartas]
+a_estrela = { nome = "A Estrela", numero = "XVII", tipo = "buff", efeito = "bits", valor = 15, curto = "+15% bits", desc = "+15% de Bits em toda quest", icone = "estrela" }
+o_sol = { nome = "O Sol", numero = "XIX", tipo = "buff", efeito = "xp_pomodoro", valor = 10, curto = "+10% xp", desc = "+10% de XP em todo pomodoro", icone = "sol" }
+o_mago = { nome = "O Mago", numero = "I", tipo = "buff", efeito = "mp_pausa", valor = 3, curto = "+3 mana na pausa", desc = "pausa respeitada dá +3 de mana", icone = "varinha" }
+a_forca = { nome = "A Força", numero = "VIII", tipo = "buff", efeito = "hp_pausa", valor = 2, curto = "+2 HP na pausa", desc = "pausa respeitada cura 2 de HP", icone = "coracao" }
+a_roda = { nome = "A Roda da Fortuna", numero = "X", tipo = "buff", efeito = "xp_commit", valor = 20, curto = "+20% xp de commit", desc = "commits valem +20% de XP", icone = "roda" }
+a_torre = { nome = "A Torre", numero = "XVI", tipo = "debuff", efeito = "daily_mult", valor = 2, curto = "daily x2 HP", desc = "dailies vencidas custam o dobro de HP", icone = "raio" }
+a_lua = { nome = "A Lua", numero = "XVIII", tipo = "debuff", efeito = "mp_pausa", valor = -2, curto = "-2 mana na pausa", desc = "pausa respeitada dá 2 de mana a menos", icone = "lua" }
+o_diabo = { nome = "O Diabo", numero = "XV", tipo = "debuff", efeito = "teto", valor = -2, curto = "teto -2", desc = "o teto diário cai 2 pomodoros", icone = "chifre" }
+a_morte = { nome = "A Morte", numero = "XIII", tipo = "debuff", efeito = "abandono_mult", valor = 1.5, curto = "abandono x1,5", desc = "abandonar custa 50% mais HP", icone = "caveira" }
+o_louco = { nome = "O Louco", numero = "0", tipo = "debuff", efeito = "combo_max", valor = -0.1, curto = "combo -0,1", desc = "o combo para um degrau antes", icone = "louco" }
+
+# ---------------------------------------------------------------- loja
+# categoria: consumivel, cosmetico, utilitario, titulo, tema
+[itens]
+pocao_hp = { categoria = "consumivel", ordem = 1, nome = "Poção de HP", preco = 80, efeito = "cura", valor = 30, desc = "+30 de HP na hora", icone = "pocao", cor = "red", detalhe = "Cura 30 de HP na hora, sem passar do máximo.", dica = "Antes de um dia de prova com dailies, uma poção evita o desmaio." }
+cafe = { categoria = "consumivel", ordem = 2, nome = "Café forte", preco = 50, efeito = "mana", valor = 20, desc = "+20 de mana na hora", icone = "cafe", cor = "blue", detalhe = "Recupera 20 de mana na hora. Dá para usar no meio de um pomodoro para pagar uma skill.", dica = "O café paga uma skill no meio do pomodoro sem esperar a mana encher. Guarde um para dia de prova." }
+congelar = { categoria = "consumivel", ordem = 3, nome = "Congelar streak", preco = 200, efeito = "congelar", valor = 1, desc = "protege o streak por um dia perdido", icone = "cadeado", cor = "yellow", detalhe = "Fica ativo até o primeiro dia sem pomodoro: esse dia não quebra o streak.", dica = "Bom para viagem ou dia de prova presencial." }
+pocao_grande = { categoria = "consumivel", ordem = 4, nome = "Poção grande de HP", preco = 180, efeito = "cura", valor = 70, desc = "+70 de HP na hora", icone = "pocao", cor = "red", detalhe = "Cura 70 de HP na hora, sem passar do máximo.", dica = "Para quando o HP já está no laranja." }
+pergaminho = { categoria = "consumivel", ordem = 5, nome = "Pergaminho de reestimar", preco = 120, efeito = "reestimar", valor = 1, desc = "reestima uma quest sem custo", icone = "lampada", cor = "yellow", detalhe = "A próxima mudança de estimativa ou dificuldade numa quest já começada sai de graça.", dica = "Estimou mal? Acontece. Melhor reestimar do que largar a quest." }
+bilhete = { categoria = "consumivel", ordem = 6, nome = "Bilhete de caixa", preco = 150, efeito = "caixa", valor = 1, desc = "caixa com Bits e cosméticos sorteados", icone = "bau", cor = "yellow", detalhe = "Abre uma caixa: de 20 a 120 Bits, ou um cosmético que você ainda não tem.", dica = "É sorte. Não compre bilhete com os Bits da poção." }
+elixir = { categoria = "consumivel", ordem = 7, nome = "Elixir de respec", preco = 1500, efeito = "respec_total", valor = 1, desc = "refaz a árvore de skills inteira", icone = "raio", cor = "blue", detalhe = "Desaprende todas as skills da classe e devolve todos os pontos.", dica = "Antes de comprar, veja se o respec de uma skill só (r na árvore) não basta." }
+moldura_dupla = { categoria = "cosmetico", ordem = 1, nome = "Moldura dupla", preco = 120, efeito = "moldura", valor = "dupla", desc = "retrato com borda dupla", icone = "cabide", cor = "magenta", detalhe = "Troca a borda do retrato no painel por uma borda dupla.", dica = "Só aparência." }
+moldura_redonda = { categoria = "cosmetico", ordem = 2, nome = "Moldura redonda", preco = 80, efeito = "moldura", valor = "redonda", desc = "retrato com cantos redondos", icone = "cabide", cor = "magenta", detalhe = "Troca a borda do retrato por uma de cantos redondos.", dica = "Só aparência." }
+moldura_grossa = { categoria = "cosmetico", ordem = 3, nome = "Moldura grossa", preco = 120, efeito = "moldura", valor = "grossa", desc = "retrato com borda grossa", icone = "cabide", cor = "magenta", detalhe = "Troca a borda do retrato por uma borda grossa.", dica = "Só aparência." }
+moldura_tracejada = { categoria = "cosmetico", ordem = 4, nome = "Moldura tracejada", preco = 60, efeito = "moldura", valor = "tracejada", desc = "retrato com borda tracejada", icone = "cabide", cor = "magenta", detalhe = "Troca a borda do retrato por uma borda tracejada.", dica = "Só aparência." }
+retrato_vermelho = { categoria = "cosmetico", ordem = 5, nome = "Retrato vermelho", preco = 100, efeito = "cor_retrato", valor = "red", desc = "iniciais em vermelho", icone = "paleta", cor = "red", detalhe = "As iniciais do retrato ficam vermelhas.", dica = "Só aparência." }
+retrato_verde = { categoria = "cosmetico", ordem = 6, nome = "Retrato verde", preco = 100, efeito = "cor_retrato", valor = "green", desc = "iniciais em verde", icone = "paleta", cor = "green", detalhe = "As iniciais do retrato ficam verdes.", dica = "Só aparência." }
+retrato_amarelo = { categoria = "cosmetico", ordem = 7, nome = "Retrato amarelo", preco = 100, efeito = "cor_retrato", valor = "yellow", desc = "iniciais em amarelo", icone = "paleta", cor = "yellow", detalhe = "As iniciais do retrato ficam amarelas.", dica = "Só aparência." }
+retrato_roxo = { categoria = "cosmetico", ordem = 8, nome = "Retrato roxo", preco = 100, efeito = "cor_retrato", valor = "magenta", desc = "iniciais em roxo", icone = "paleta", cor = "magenta", detalhe = "As iniciais do retrato ficam roxas.", dica = "Só aparência." }
+retrato_ciano = { categoria = "cosmetico", ordem = 9, nome = "Retrato ciano", preco = 100, efeito = "cor_retrato", valor = "cyan", desc = "iniciais em ciano", icone = "paleta", cor = "cyan", detalhe = "As iniciais do retrato ficam ciano.", dica = "Só aparência." }
+marca_pagina = { categoria = "utilitario", ordem = 1, nome = "Marca-página", preco = 300, efeito = "teto", valor = 1, desc = "o teto diário sobe 1 pomodoro", icone = "chave", cor = "blue", detalhe = "Para sempre: o overtraining começa um pomodoro depois.", dica = "Vale mais para quem bate o teto toda semana." }
+garrafa = { categoria = "utilitario", ordem = 2, nome = "Garrafa d'água", preco = 250, efeito = "mp_pausa", valor = 1, desc = "pausa respeitada dá +1 de mana", icone = "chave", cor = "blue", detalhe = "Para sempre: toda pausa respeitada dá 1 de mana a mais.", dica = "Beba água na pausa, de verdade." }
+agenda = { categoria = "utilitario", ordem = 3, nome = "Agenda", preco = 250, efeito = "daily_hp", valor = 25, desc = "daily vencida custa 25% menos HP", icone = "chave", cor = "blue", detalhe = "Para sempre: a penalidade das dailies vencidas cai 25%.", dica = "Melhor ainda é não deixar vencer." }
+despertador = { categoria = "utilitario", ordem = 4, nome = "Despertador", preco = 80, efeito = "aviso_antes", valor = 1, desc = "avisa 1 min antes do fim do pomodoro", icone = "chave", cor = "blue", detalhe = "Para sempre: o serviço avisa pelo mako quando falta 1 minuto.", dica = "Dá tempo de fechar o raciocínio." }
+titulo_pontual = { categoria = "titulo", ordem = 1, nome = "o Pontual", preco = 100, efeito = "titulo", valor = "o Pontual", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"o Pontual\" no lugar do título da classe.", dica = "Só aparência." }
+titulo_biblioteca = { categoria = "titulo", ordem = 2, nome = "Rato de Biblioteca", preco = 150, efeito = "titulo", valor = "Rato de Biblioteca", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"Rato de Biblioteca\" no lugar do título da classe.", dica = "Só aparência." }
+titulo_cafe = { categoria = "titulo", ordem = 3, nome = "Café com Leite", preco = 80, efeito = "titulo", valor = "Café com Leite", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"Café com Leite\" no lugar do título da classe.", dica = "Só aparência." }
+titulo_lenda = { categoria = "titulo", ordem = 4, nome = "Lenda do Pomodoro", preco = 400, efeito = "titulo", valor = "Lenda do Pomodoro", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"Lenda do Pomodoro\" no lugar do título da classe.", dica = "Só aparência." }
+titulo_sem_bugs = { categoria = "titulo", ordem = 5, nome = "Sem Bugs", preco = 200, efeito = "titulo", valor = "Sem Bugs", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"Sem Bugs\" no lugar do título da classe.", dica = "Só aparência." }
+titulo_madrugador = { categoria = "titulo", ordem = 6, nome = "Madrugador", preco = 120, efeito = "titulo", valor = "Madrugador", desc = "título embaixo do nome", icone = "coroa", cor = "yellow", detalhe = "Mostra \"Madrugador\" no lugar do título da classe.", dica = "Só aparência." }
+tema_verde = { categoria = "tema", ordem = 1, nome = "Mapa verde", preco = 0, efeito = "tema_calor", valor = "green", desc = "mapa de calor em verde (padrão)", icone = "grade", cor = "green", detalhe = "O mapa de calor usa a cor verde do tema do Omarchy.", dica = "Já vem com o herói." }
+tema_azul = { categoria = "tema", ordem = 2, nome = "Mapa azul", preco = 100, efeito = "tema_calor", valor = "blue", desc = "mapa de calor em azul", icone = "grade", cor = "blue", detalhe = "O mapa de calor passa a usar o azul do tema.", dica = "Só aparência." }
+tema_roxo = { categoria = "tema", ordem = 3, nome = "Mapa roxo", preco = 100, efeito = "tema_calor", valor = "magenta", desc = "mapa de calor em roxo", icone = "grade", cor = "magenta", detalhe = "O mapa de calor passa a usar o roxo do tema.", dica = "Só aparência." }
+tema_laranja = { categoria = "tema", ordem = 4, nome = "Mapa laranja", preco = 100, efeito = "tema_calor", valor = "orange", desc = "mapa de calor em laranja", icone = "grade", cor = "orange", detalhe = "O mapa de calor passa a usar o laranja do tema.", dica = "Só aparência." }
+
+# ---------------------------------------------------------------- conquistas
+# O XP de uma conquista só sai de pomodoros e commits já registrados.
+[conquistas]
+primeiro_pomodoro = { ordem = 1, nome = "primeiro pomodoro", tipo = "pomodoros", alvo = 1, xp = 10, icone = "trofeu" }
+streak_3 = { ordem = 2, nome = "3 dias seguidos", tipo = "streak", alvo = 3, xp = 30, icone = "trofeu" }
+streak_7 = { ordem = 3, nome = "7 dias seguidos", tipo = "streak", alvo = 7, xp = 70, icone = "trofeu" }
+streak_10 = { ordem = 4, nome = "10 dias seguidos", tipo = "streak", alvo = 10, xp = 100, icone = "trofeu" }
+streak_30 = { ordem = 5, nome = "30 dias seguidos", tipo = "streak", alvo = 30, xp = 300, icone = "trofeu" }
+pomodoros_100 = { ordem = 6, nome = "100 pomodoros", tipo = "pomodoros", alvo = 100, xp = 100, icone = "trofeu" }
+pomodoros_500 = { ordem = 7, nome = "500 pomodoros", tipo = "pomodoros", alvo = 500, xp = 250, icone = "trofeu" }
+pomodoros_1000 = { ordem = 8, nome = "1.000 pomodoros", tipo = "pomodoros", alvo = 1000, xp = 500, icone = "trofeu" }
+commit_ci = { ordem = 9, nome = "primeiro commit com CI", tipo = "commit_vinculado", alvo = 1, xp = 60, icone = "medalha" }
+primeiro_arco = { ordem = 10, nome = "primeiro chefe de arco", tipo = "arcos", alvo = 1, xp = 100, icone = "trofeu" }
