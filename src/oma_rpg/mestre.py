@@ -1,10 +1,9 @@
 """O Mestre da taverna: o Claude Code do usuário, com a skill oma-rpg.
 
 MestreClaude roda `claude -p` (a mensagem vai pela entrada padrão, nunca pela linha de comando de um shell) com
-`--tools Bash` e só estes comandos liberados: `oma-rpg status`, `quests`, `history`, `draft` e `editar`. Qualquer
-outra ferramenta ou comando é negado pelo próprio Claude Code (`--permission-mode dontAsk`). Mesmo que o modelo tente,
-o CLI não tem como aprovar, concluir ou dar XP (ver comandos.py). A saída `stream-json` vira as mensagens da taverna;
-o que vem do modelo é texto, nunca marcação nem comando.
+todas as ferramentas e pastas liberadas (`--permission-mode bypassPermissions` e `--add-dir /`). Mesmo que o modelo
+tente, o CLI não tem como aprovar, concluir ou dar XP (ver comandos.py). A saída `stream-json` vira as mensagens da
+taverna; o que vem do modelo é texto, nunca marcação nem comando.
 
 MestreFalso responde com frases prontas no --demo e cria rascunhos com o papel de Mestre.
 """
@@ -17,13 +16,12 @@ import shutil
 import subprocess
 import threading
 
-PERMITIDOS = ["Bash(oma-rpg status:*)", "Bash(oma-rpg quests:*)", "Bash(oma-rpg history:*)", "Bash(oma-rpg draft:*)",
-              "Bash(oma-rpg editar:*)"]
 PROMPT = (
-    "Você é o Mestre do oma-rpg, um RPG de estudo. Use a skill oma-rpg se ela estiver instalada. Só use os comandos "
-    "oma-rpg status, quests, history, draft e editar, sempre com --json. Você ajuda a definir quests (rascunhos), mas "
-    "não aprova, não conclui e não dá XP: a recompensa sai da tabela do jogo e o jogador aprova pela interface. "
-    "Responda em português do Brasil, curto, sem travessão, no tom da classe do herói."
+    "Você é o Mestre do oma-rpg, um RPG de estudo. Use a skill oma-rpg se ela estiver instalada. Para interagir com o "
+    "jogo, use os comandos oma-rpg status, quests, history, draft e editar, sempre com --json; você também tem acesso "
+    "às ferramentas e pastas do sistema quando precisar consultar arquivos ou projetos. Você ajuda a definir quests "
+    "(rascunhos), mas não aprova, não conclui e não dá XP: a recompensa sai da tabela do jogo e o jogador aprova pela "
+    "interface. Responda em português do Brasil, curto, sem travessão, no tom da classe do herói."
 )
 ATALHOS = {
     "/revisão": "Faça a revisão semanal: rode oma-rpg status --json e oma-rpg history --days 7 --json, diga em 3 linhas o "
@@ -41,8 +39,8 @@ def expandir(texto: str) -> str:
 
 
 def comando_claude(exe: str, sessao: str | None = None) -> list[str]:
-    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", "Bash", "--permission-mode", "dontAsk",
-           "--append-system-prompt", PROMPT, "--allowedTools", *PERMITIDOS]
+    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--tools", "default",
+           "--permission-mode", "bypassPermissions", "--add-dir", "/", "--append-system-prompt", PROMPT]
     if sessao and all(c in "0123456789abcdef-" for c in sessao) and len(sessao) <= 64:
         cmd[2:2] = ["--resume", sessao]
     return cmd
