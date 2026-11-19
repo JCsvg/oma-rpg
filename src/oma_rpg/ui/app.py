@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import importlib
 import threading
-import time
 
 from rich.text import Text
 from textual.app import App, ComposeResult

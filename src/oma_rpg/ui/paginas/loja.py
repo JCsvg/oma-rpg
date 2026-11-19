@@ -12,7 +12,7 @@ from oma_rpg.nucleo import consultas as C
 from oma_rpg.ui import desenho as D
 from oma_rpg.ui.base import Janela, Pagina
 from oma_rpg.ui.icones import ic
-from oma_rpg.ui.lista import Lista, ajustar
+from oma_rpg.ui.lista import Lista
 from oma_rpg.ui.widgets import Botao, Pintado
 
 CATEGORIAS = [("consumivel", "consumíveis", "pocao"), ("cosmetico", "cosméticos", "cabide"), ("utilitario", "utilitários", "chave"),

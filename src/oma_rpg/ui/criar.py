@@ -8,11 +8,10 @@ import getpass
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Input, Static
 
-from oma_rpg.nucleo import consultas as C
 from oma_rpg.ui import desenho as D
 from oma_rpg.ui.base import Janela
 from oma_rpg.ui.fonte import grande

@@ -8,7 +8,7 @@ from datetime import timedelta
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.nucleo import regras
