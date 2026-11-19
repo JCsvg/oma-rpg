@@ -491,7 +491,7 @@ class PaginaTaverna(Pagina):
     def action_focar_quest(self) -> None:
         q = self._quest()
         if q:
-            self.app.pedir("iniciar", {"quest_id": q["id"]}, lambda ok, r: ok and self.app.abrir_pagina("foco", foco=True))
+            self.app.pedir("iniciar", {"quest": q["id"]}, lambda ok, r: ok and self.app.abrir_pagina("foco", foco=True))
 
     def action_concluir_quest(self) -> None:
         q = self._quest()

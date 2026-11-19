@@ -57,7 +57,7 @@ class OmaRpgApp(App[None]):
         Binding("alt+right,alt+l", "alt_h(1)", show=False, priority=True),
         Binding("alt+up,alt+k", "alt_v(-1)", show=False, priority=True),
         Binding("alt+down,alt+j", "alt_v(1)", show=False, priority=True),
-        *[Binding(f"alt+{n}", f"pagina({n})", show=False, priority=True) for n in range(1, 8)],
+        *[Binding(f"alt+{n}", f"pagina({n})", show=False, priority=True) for n in range(1, 9)],
         Binding("ctrl+@,ctrl+space,ctrl+at,f1", "teclas", show=False, priority=True),
         Binding("slash", "buscar", show=False),
         Binding("question_mark", "ajuda", show=False),
@@ -168,7 +168,8 @@ class OmaRpgApp(App[None]):
             if not r:
                 self.exit()
                 return
-            nome, classe = r
+            nome, classe = r[0], r[1]
+            perfil = r[2] if len(r) > 2 else None
 
             def depois(ok, res):
                 if ok:
@@ -178,7 +179,10 @@ class OmaRpgApp(App[None]):
                 else:
                     self.avisar_erro(res)
                     self.criar_heroi()
-            self.pedir("criar_heroi", {"nome": nome, "classe": classe}, depois)
+            args = {"nome": nome, "classe": classe}
+            if perfil:
+                args["perfil"] = perfil
+            self.pedir("criar_heroi", args, depois)
         self.push_screen(Criar(), fim)
 
     # ------------------------------------------------------------ serviço e dados
@@ -431,6 +435,8 @@ class OmaRpgApp(App[None]):
         if pagina == "taverna":
             n = int(self.b.escalar("SELECT COUNT(*) FROM quests WHERE estado = 'rascunho'", (), 0))
             return Text(str(n), style=self.cor("green")) if n else Text("")
+        if pagina == "status" and h.get("pontos_attr"):
+            return Text(f"+{h['pontos_attr']}", style=self.cor("cyan"))
         return Text("")
 
     def n_repos(self) -> int:

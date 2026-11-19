@@ -12,7 +12,7 @@ from tests.conftest import janela, pronto
 
 GRANDE = (180, 48)
 TECLAS = {"esq": "ctrl+left", "dir": "ctrl+right", "cima": "ctrl+up", "baixo": "ctrl+down"}
-PAGINAS = ["painel", "foco", "quests", "skills", "classes", "loja", "historico", "taverna"]
+PAGINAS = ["painel", "foco", "quests", "skills", "classes", "loja", "historico", "taverna", "status"]
 
 
 def linhas():

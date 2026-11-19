@@ -11,6 +11,7 @@ ICONES: dict[str, tuple[str, str]] = {
     "marca": ("\U000F03EB", "✎"), "painel": ("\U000F02DC", "⌂"), "foco": ("\U000F051B", "◷"),
     "quests": ("\U000F0756", "☰"), "skills": ("\U000F0241", "ϟ"), "loja": ("\U000F04DC", "▤"),
     "historico": ("\U000F02C1", "▦"), "taverna": ("\U000F167A", "☺"), "mestre": ("\U000F167A", "☺"),
+    "status": ("\U000F0004", "@"), "polimata": ("\U000F0335", "✦"), "monge": ("\U000F02D1", "☸"),
     "mistico": ("\U000F18A1", "♠"), "programa": ("\U000F018D", "▸"), "empreendedor": ("\U000F012A", "↗"),
     "rato": ("\U000F01E5", "↔"), "gamer": ("\U000F0297", "◎"), "otaku": ("\U000F05DA", "▯"),
     "vida": ("\U000F02D1", "♥"), "mana": ("\U000F0241", "ϟ"), "xp": ("\U000F04CF", "✪"), "bits": ("\U000F0813", "₿"),

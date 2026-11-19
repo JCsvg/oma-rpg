@@ -26,6 +26,8 @@ EXEMPLOS = {
     "rato": ["pausa respeitada: +6 de mana", "e mais +3 de HP (fadiga)", "11º pomodoro do dia: overtraining"],
     "gamer": ["combo x1.0 → x2.0", "11 pomodoros seguidos no dia", "45 min parado: volta a x1.0"],
     "otaku": ["HP abaixo de 30%: virada", "pomodoro de 24 xp vale 48", "chefe do arco: +50%"],
+    "polimata": ["perícias sobem +25% mais rápido", "10% chance de crítico (+50% XP)", "fichamento turbina próxima quest"],
+    "monge": ["confirmar quest sem pomodoro +30%", "concluir quest cura +3 de HP", "disciplina reduz penalidades"],
 }
 
 
@@ -169,10 +171,11 @@ class CampoNome(Janela):
         yield Static("")
         with Horizontal():
             yield Input(getpass.getuser()[:24], id="nome", placeholder="nome do herói")
+            yield Botao("Q  sobre você (questionário)", id="questionario")
             yield Botao("enter  criar herói", id="criar", classes="cheio")
 
     def on_mount(self) -> None:
-        self.titulo("nome do herói", "tab alterna")
+        self.titulo("nome do herói", "tab alterna · Q questionário")
 
 
 class Criar(Screen):
@@ -184,11 +187,16 @@ class Criar(Screen):
     """
     BINDINGS = [Binding("escape", "sair", priority=True), Binding("tab", "alternar", priority=True),
                 Binding("shift+tab", "alternar", priority=True), Binding("enter", "criar", priority=True),
+                Binding("Q,shift+q", "questionario", show=False),
                 Binding("ctrl+right,ctrl+l", "janela('dir')", priority=True), Binding("ctrl+left,ctrl+h", "janela('esq')", priority=True),
                 Binding("ctrl+down,ctrl+j", "janela('baixo')", priority=True), Binding("ctrl+up,ctrl+k", "janela('cima')", priority=True)]
     VIZINHAS = {"criar-classes": {"dir": "criar-detalhes", "baixo": "criar-nome"},
                 "criar-detalhes": {"esq": "criar-classes", "baixo": "criar-nome"},
                 "criar-nome": {"cima": "criar-classes"}}
+
+    def __init__(self, **kw) -> None:
+        super().__init__(**kw)
+        self.perfil: dict = {}
 
     def compose(self) -> ComposeResult:
         a = self.app
@@ -205,7 +213,19 @@ class Criar(Screen):
         self.query_one("#criar-lista", Lista).focus()
 
     def itens(self) -> list[tuple[str, str, str]]:
-        return [("↑↓", "classe", "noop"), ("tab", "nome", "alternar"), ("enter", "criar herói", "criar"), ("esc", "sair", "sair")]
+        return [("↑↓", "classe", "noop"), ("tab", "nome", "alternar"),
+                ("Q", "sobre você" + (" ✓" if self.perfil else ""), "questionario"),
+                ("enter", "criar herói", "criar"), ("esc", "sair", "sair")]
+
+    def action_questionario(self) -> None:
+        from oma_rpg.ui.dialogos import QuestionarioDialogo
+
+        def depois(res) -> None:
+            if isinstance(res, dict):
+                self.perfil = res
+                self.query_one("#questionario", Botao).label = "Q  sobre você ✓"
+                self.query_one(Rodape).pintar()
+        self.app.push_screen(QuestionarioDialogo(self.perfil), depois)
 
     def action_alternar(self) -> None:
         i = self.query_one("#nome", Input)
@@ -231,11 +251,15 @@ class Criar(Screen):
         if not nome:
             self.query_one("#nome", Input).focus()
             return
-        self.dismiss((nome, self.query_one(Detalhes).classe))
+        classe = self.query_one(Detalhes).classe
+        self.dismiss((nome, classe, self.perfil) if self.perfil else (nome, classe))
 
     def action_sair(self) -> None:
         self.dismiss(None)
 
     def on_botao_apertado(self, ev: Botao.Apertado) -> None:
         ev.stop()
-        self.action_criar()
+        if ev.botao.id == "questionario":
+            self.action_questionario()
+        else:
+            self.action_criar()

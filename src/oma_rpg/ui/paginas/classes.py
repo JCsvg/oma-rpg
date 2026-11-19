@@ -6,7 +6,7 @@ from __future__ import annotations
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.ui import desenho as D
@@ -15,7 +15,7 @@ from oma_rpg.ui.icones import ic
 from oma_rpg.ui.lista import ajustar
 from oma_rpg.ui.widgets import Pintado
 
-GRADE = ["mistico", "programa", "empreendedor", "rato", "gamer", "otaku"]
+GRADE = ["mistico", "programa", "empreendedor", "rato", "gamer", "otaku", "polimata", "monge"]
 
 
 class CaixaClasse(Janela):
@@ -87,17 +87,21 @@ class PaginaClasses(Pagina):
         "classe-programa": {"esq": "classe-mistico", "cima": "topo", "baixo": "classe-rato"},
         "classe-empreendedor": {"dir": "classe-rato", "cima": "classe-mistico", "baixo": "classe-gamer"},
         "classe-rato": {"esq": "classe-empreendedor", "cima": "classe-programa", "baixo": "classe-otaku"},
-        "classe-gamer": {"dir": "classe-otaku", "cima": "classe-empreendedor"},
-        "classe-otaku": {"esq": "classe-gamer", "cima": "classe-rato"},
+        "classe-gamer": {"dir": "classe-otaku", "cima": "classe-empreendedor", "baixo": "classe-polimata"},
+        "classe-otaku": {"esq": "classe-gamer", "cima": "classe-rato", "baixo": "classe-monge"},
+        "classe-polimata": {"dir": "classe-monge", "cima": "classe-gamer"},
+        "classe-monge": {"esq": "classe-polimata", "cima": "classe-otaku"},
     }
     BINDINGS = [Binding("enter", "arvore", show=False), Binding("t", "trocar", show=False)]
-    DEFAULT_CSS = "PaginaClasses { layout: vertical; } PaginaClasses .fila { height: 1fr; }"
+    DEFAULT_CSS = "PaginaClasses { layout: vertical; } PaginaClasses #cl-scroll { height: 1fr; } PaginaClasses .fila { height: 15; }"
 
     def compose(self) -> ComposeResult:
-        for i in range(0, 6, 2):
-            with Horizontal(classes="fila"):
-                yield CaixaClasse(GRADE[i])
-                yield CaixaClasse(GRADE[i + 1])
+        with VerticalScroll(id="cl-scroll"):
+            for i in range(0, len(GRADE), 2):
+                with Horizontal(classes="fila"):
+                    yield CaixaClasse(GRADE[i])
+                    if i + 1 < len(GRADE):
+                        yield CaixaClasse(GRADE[i + 1])
 
     def on_mount(self) -> None:
         h = C.heroi(self.app.b)

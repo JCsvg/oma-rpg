@@ -15,7 +15,7 @@ from oma_rpg.ui.lista import Lista, ajustar
 from oma_rpg.ui.widgets import Pintado
 
 PAGINAS = [("painel", "painel"), ("foco", "foco"), ("quests", "quests"), ("skills", "skills"), ("loja", "loja"),
-           ("historico", "histórico"), ("taverna", "taverna")]
+           ("historico", "histórico"), ("taverna", "taverna"), ("status", "status")]
 
 
 class Lateral(Vertical):
@@ -23,7 +23,7 @@ class Lateral(Vertical):
     Lateral { width: 30; height: 1fr; padding: 0 1; }
     Lateral.-foco #cab-paineis { color: $accent; text-style: bold; }
     Lateral #cab-paineis { height: 2; }
-    Lateral #lista-paineis { height: 7; }
+    Lateral #lista-paineis { height: 8; }
     Lateral .espaco { height: 1fr; }
     """
 

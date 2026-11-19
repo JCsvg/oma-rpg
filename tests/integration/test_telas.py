@@ -646,3 +646,24 @@ async def test_taverna_m_escolhe_agente_e_modelo(app):
         assert app.mestre.agente == "agy"
         assert app.mestre.modelo == "gemini-3-pro"
         assert app.mestre_rotulo() == "agy · gemini-3-pro"
+
+
+async def test_status_atributos_pericias_e_perfil(app):
+    from oma_rpg.ui.dialogos import QuestionarioDialogo
+
+    async with app.run_test(size=G) as pilot:
+        await pilot.press("alt+8")
+        await pilot.pause(0.2)
+        assert app.pagina_nome == "status"
+        app.focar_janela("status-pericias")
+        await pilot.press("n")
+        await pilot.pause(0.2)
+        for ch in "Rust":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        assert any(p["nome"] == "Rust" for p in app.st["pericias"])
+        await pilot.press("e")
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, QuestionarioDialogo)
+        await pilot.press("escape")

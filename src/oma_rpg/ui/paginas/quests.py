@@ -528,6 +528,8 @@ class JanelaQuest(Janela):
             deps = ", ".join(f"#{d}" for d in q["depende_de"])
             msg = f"🔒 bloqueada (falta {', '.join('#' + str(d) for d in q['faltam_deps'])})" if q.get("bloqueada") else f"trilha: após {deps}"
             itens.append(("txt", Text(msg, style=a.cor("yellow") if q.get("bloqueada") else a.cor("mudo"))))
+        if q.get("pericias"):
+            itens.append(("txt", Text("perícias: " + ", ".join(q["pericias"]), style=a.cor("cyan"))))
         if q["tipo"] == "daily":
             itens.append(("txt", Text("daily: vale uma vez por dia; vencida custa HP", style=a.cor("mudo"))))
         if q["porque"]:
