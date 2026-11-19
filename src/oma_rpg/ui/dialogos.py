@@ -834,3 +834,217 @@ class Vitrine(Screen):
 
     def action_fechar(self) -> None:
         self.dismiss(None)
+
+
+# ---------------------------------------------------------------- pastas que o Mestre pode ler
+def _curto(caminho: str) -> str:
+    import os
+    h = os.path.expanduser("~")
+    return "~" + caminho[len(h):] if caminho == h or caminho.startswith(h + "/") else caminho
+
+
+class Pastas(Dialogo):
+    """As pastas liberadas para o Mestre ler (só leitura, com as subpastas). a adiciona, x remove."""
+
+    DEFAULT_CSS = css("Pastas", "Pastas #caixa { width: 84; } Pastas Lista { height: auto; max-height: 14; margin: 1 0; }")
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("a,n", "adicionar"), Binding("x,delete", "remover")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = "pastas que o Mestre pode ler"
+            yield Static(Text("Só leitura, com as subpastas. O Mestre lê pelo oma-rpg ls e ver, e pelo Read, Glob e Grep "
+                              "do Claude Code, só aqui dentro. Ele não consegue mudar esta lista.", style=self.app.cor("mudo")),
+                         classes="linha-texto")
+            yield Lista(self._linha, id="pastas-lista", cursor_sem_foco=True)
+            with Horizontal(id="botoes"):
+                yield Botao("a  adicionar pasta", id="adicionar", classes="cheio")
+                yield Botao("x  remover", id="remover")
+                yield Botao("esc  fechar", id="fechar")
+            yield Static(pe(self.app, [("↑ ↓", "escolhe"), ("a", "adiciona"), ("x", "remove"), ("esc", "fecha")]), classes="pe")
+
+    def on_mount(self) -> None:
+        self.recarregar()
+        self.query_one(Lista).focus()
+
+    def recarregar(self) -> None:
+        a = self.app
+        ps = C.pastas(a.b, a.agora())
+        self.query_one(Lista).definir(ps or [None])
+
+    def _linha(self, p, i, est) -> list[Text]:
+        a = self.app
+        if p is None:
+            return [Text("nenhuma pasta liberada ainda", style=a.cor("mudo"))]
+        t = Text()
+        t.append(ic("ok") + " ", style=a.cor("green"))
+        t.append(_curto(p["caminho"]), style=a.cor("texto"))
+        dir_ = Text("sempre", style=a.cor("mudo")) if p["modo"] == "sempre" else \
+            Text(f"uma vez, até {C.hora(p['expira'])}", style=a.cor("yellow"))
+        return [D.linha_lr(t, dir_, est.largura)]
+
+    def action_adicionar(self) -> None:
+        def escolhida(caminho):
+            if caminho:
+                confirmar_pasta(self.app, caminho, lambda: self.set_timer(0.2, self.recarregar))
+        self.app.push_screen(EscolherPasta(), escolhida)
+
+    def action_remover(self) -> None:
+        p = self.query_one(Lista).item_atual()
+        if p:
+            self.app.pedir("pasta_remover", {"caminho": p["caminho"]}, lambda ok, r: ok and self.set_timer(0.2, self.recarregar))
+
+    def apertou(self, bid: str) -> None:
+        {"adicionar": self.action_adicionar, "remover": self.action_remover, "fechar": self.action_cancelar}.get(bid, lambda: None)()
+
+
+def confirmar_pasta(app, caminho: str, depois=None, modo: str = "sempre") -> None:
+    """Mostra o caminho absoluto resolvido e libera só depois do sim. Pasta sensível nem chega a perguntar."""
+    from oma_rpg.nucleo import pastas
+    from oma_rpg.nucleo.jogo import ErroJogo
+    try:
+        real = pastas.validar_raiz(caminho)
+    except ErroJogo as e:
+        app.avisar_erro(f"não dá para liberar: {e}")
+        return
+
+    def fim(ok):
+        if ok:
+            app.pedir("pasta_adicionar", {"caminho": real, "modo": modo}, lambda ok2, r: ok2 and depois and depois())
+    app.push_screen(Confirmar("liberar pasta para o Mestre?", [real, "só leitura, com as subpastas; dá para remover depois (tecla P)"],
+                              "liberar"), fim)
+
+
+class EscolherPasta(Dialogo):
+    """Navegador de pastas dentro do app (sem zenity). enter ou → entra, ← sobe, espaço escolhe a pasta aberta."""
+
+    DEFAULT_CSS = css("EscolherPasta", """
+    EscolherPasta #caixa { width: 90; }
+    EscolherPasta Lista { height: 18; margin: 1 0; }
+    """)
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("left,h,backspace", "subir"),
+                Binding("right,l", "entrar"), Binding("space,s", "escolher")]
+
+    def __init__(self, inicio: str | None = None) -> None:
+        super().__init__()
+        import os
+        h = os.path.expanduser("~")
+        self.atual = inicio or (os.path.join(h, "Projects") if os.path.isdir(os.path.join(h, "Projects")) else h)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="caixa") as c:
+            c.border_title = "escolher pasta"
+            yield Input(self.atual, id="caminho-pasta", placeholder="digite o caminho e enter")
+            yield Lista(self._linha, id="pastas-nav", cursor_sem_foco=True)
+            with Horizontal(id="botoes"):
+                yield Botao("espaço  escolher esta pasta", id="escolher", classes="cheio")
+                yield Botao("esc  cancelar", id="cancelar")
+            yield Static(pe(self.app, [("enter →", "entra"), ("←", "sobe"), ("espaço", "escolhe a aberta"), ("esc", "cancela")]),
+                         classes="pe")
+
+    def on_mount(self) -> None:
+        self.abrir(self.atual)
+        self.query_one(Lista).focus()
+
+    def abrir(self, caminho: str) -> None:
+        import os
+        caminho = os.path.realpath(os.path.expanduser(caminho))
+        if not os.path.isdir(caminho):
+            self.app.avisar_erro("não é uma pasta")
+            return
+        self.atual = caminho
+        try:
+            filhos = sorted((e.name for e in os.scandir(caminho) if e.is_dir() and not e.name.startswith(".")), key=str.lower)
+        except OSError:
+            filhos = []
+        itens = ([".."] if caminho != "/" else []) + filhos[:500]
+        self.query_one(Lista).definir(itens, cursor=0)
+        i = self.query_one(Input)
+        with i.prevent(Input.Changed):
+            i.value = _curto(caminho)
+
+    def _linha(self, nome, i, est) -> list[Text]:
+        a = self.app
+        if nome == "..":
+            return [Text("  ..  (sobe)", style=a.cor("mudo"))]
+        return [Text.assemble(("  ▸ ", a.cor("accent")), (nome + "/", a.cor("texto")))]
+
+    def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
+        ev.stop()
+        self._entrar(ev.item)
+
+    def _entrar(self, nome) -> None:
+        import os
+        if nome is None:
+            return
+        self.abrir(os.path.dirname(self.atual) if nome == ".." else os.path.join(self.atual, nome))
+
+    def action_entrar(self) -> None:
+        if isinstance(self.focused, Input):
+            return
+        self._entrar(self.query_one(Lista).item_atual())
+
+    def action_subir(self) -> None:
+        if isinstance(self.focused, Input):
+            return
+        import os
+        self.abrir(os.path.dirname(self.atual))
+
+    def action_escolher(self) -> None:
+        if isinstance(self.focused, Input):
+            return
+        self.dismiss(self.atual)
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        ev.stop()
+        self.abrir(ev.value.strip() or "~")
+        self.query_one(Lista).focus()
+
+    def apertou(self, bid: str) -> None:
+        if bid == "escolher":
+            self.dismiss(self.atual)
+        else:
+            self.dismiss(None)
+
+
+class PedidoPasta(_Simples):
+    """O Mestre quer ler uma pasta que não está liberada: liberar uma vez, liberar sempre ou negar."""
+
+    DEFAULT_CSS = css("PedidoPasta")
+    TITULO = "o Mestre quer ler uma pasta"
+    BORDA = "yellow"
+    LARGURA = 80
+    BINDINGS = [Binding("escape,n", "negar", priority=True), Binding("u", "uma_vez"), Binding("s", "sempre")]
+
+    def __init__(self, caminho: str, motivo: str = "") -> None:
+        super().__init__()
+        self.caminho, self.motivo = caminho, motivo
+
+    def linhas(self):
+        a = self.app
+        l = [Text(""), Text("O Mestre quer ler", style=a.cor("texto")), Text(self.caminho, style=f"bold {a.cor('forte')}"),
+             Text("liberar? (só leitura, com as subpastas)", style=a.cor("texto"))]
+        if self.motivo:
+            l += [Text(""), Text("por quê: " + self.motivo, style=a.cor("mudo"))]
+        l += [Text(""), Text("uma vez vale por 60 minutos; sempre fica na lista (tecla P na taverna)", style=a.cor("mudo"))]
+        return l
+
+    def botoes(self):
+        return [("uma_vez", "u  liberar uma vez", ""), ("sempre", "s  liberar sempre", "cheio"), ("negar", "n  negar", "vermelho")]
+
+    def teclas_pe(self):
+        return [("u", "uma vez"), ("s", "sempre"), ("n esc", "negar")]
+
+    def on_mount(self) -> None:
+        self.query_one("#sempre", Botao).focus()
+
+    def action_uma_vez(self) -> None:
+        self.dismiss("uma_vez")
+
+    def action_sempre(self) -> None:
+        self.dismiss("sempre")
+
+    def action_negar(self) -> None:
+        self.dismiss("negar")
+
+    def apertou(self, bid: str) -> None:
+        self.dismiss(bid)

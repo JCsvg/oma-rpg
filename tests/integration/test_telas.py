@@ -542,3 +542,89 @@ async def test_repositorios_pelo_dialogo(app, tmp_path):
         await pilot.press("enter")
         await pilot.pause(0.2)
         assert any("não existe" in a.texto.plain for a in app.query("Aviso"))
+
+
+# ---------------------------------------------------------------- pastas que o Mestre pode ler (0.2.0)
+async def test_taverna_p_libera_e_remove_pasta(app, tmp_path):
+    base = tmp_path / "home-de-teste"
+    estudo = base / "Codespace" / "Comp-Deci"
+    estudo.mkdir(parents=True)
+    async with app.run_test(size=G) as pilot:
+        await abrir(app, pilot, "taverna")
+        app.focar_janela("rascunhos-t")
+        await pilot.press("P")
+        await pilot.pause(0.2)
+        assert type(app.screen).__name__ == "Pastas"
+        await pilot.press("a")
+        await pilot.pause(0.2)
+        assert type(app.screen).__name__ == "EscolherPasta"
+        app.screen.abrir(str(base))
+        await pilot.pause(0.1)
+        assert app.screen.query_one("#pastas-nav").itens == ["..", "Codespace"]
+        app.screen.query_one("#pastas-nav").focus()
+        await pilot.press("down", "enter")
+        await pilot.pause(0.1)
+        assert app.screen.atual == str(base / "Codespace")
+        await pilot.press("down", "right")
+        await pilot.pause(0.1)
+        assert app.screen.atual == str(estudo)
+        await pilot.press("space")
+        await pilot.pause(0.2)
+        assert type(app.screen).__name__ == "Confirmar"
+        assert str(estudo) in str(app.screen.query_one(".linha-texto").render())
+        await pilot.press("right", "enter")
+        assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [str(estudo)])
+        await pilot.pause(0.3)
+        assert type(app.screen).__name__ == "Pastas"
+        assert app.screen.query_one("#pastas-lista").itens[0]["caminho"] == str(estudo)
+        await pilot.press("x")
+        assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [])
+        await pilot.press("escape")
+        await pilot.pause(0.2)
+        app.focar_janela("permissoes")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        assert type(app.screen).__name__ == "Pastas"
+
+
+async def test_pasta_sensivel_nao_chega_a_perguntar(app):
+    from pathlib import Path
+    from oma_rpg.ui.dialogos import confirmar_pasta
+    async with app.run_test(size=G) as pilot:
+        await abrir(app, pilot, "taverna")
+        confirmar_pasta(app, str(Path.home()))
+        await pilot.pause(0.2)
+        assert len(app.screen_stack) == 1
+        assert any("não dá para liberar" in a.texto.plain for a in app.query("Aviso"))
+
+
+async def test_pedido_do_mestre_abre_o_dialogo(app, tmp_path):
+    estudo = tmp_path / "Comp-Deci"
+    estudo.mkdir()
+    from oma_rpg.comandos import executar
+    async with app.run_test(size=G) as pilot:
+        await abrir(app, pilot, "taverna")
+        executar(app.jogo, "pedir_pasta", {"caminho": str(estudo), "motivo": "montar as quests"}, "mestre")
+        for ev in app.jogo.soltar_eventos():
+            app.cliente.ao_evento(ev)
+        assert await esperar(pilot, lambda: type(app.screen).__name__ == "PedidoPasta")
+        assert str(estudo) in str(app.screen.query_one(".linha-texto").render())
+        await pilot.press("s")
+        assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [str(estudo)])
+        texto_perm = texto(app.query_one("#permissoes").query_one("Pintado"))
+        assert "1 liberada" in texto_perm and "Comp-Deci" in texto_perm
+
+
+async def test_mensagem_com_pasta_pergunta_antes_de_mandar(app, tmp_path):
+    estudo = tmp_path / "Comp-Deci"
+    estudo.mkdir()
+    async with app.run_test(size=G) as pilot:
+        await abrir(app, pilot, "taverna")
+        app.query_one("#msg").load_text(f"crie quests a partir de {estudo}")
+        app.query_one("#msg").focus()
+        await pilot.press("enter")
+        assert await esperar(pilot, lambda: type(app.screen).__name__ == "PedidoPasta")
+        await pilot.press("u")
+        assert await esperar(pilot, lambda: C.caminhos_liberados(app.b, app.agora()) == [str(estudo)])
+        assert C.pastas(app.b, app.agora())[0]["modo"] == "uma_vez"
+        assert await esperar(pilot, lambda: app.b.um("SELECT 1 FROM taverna WHERE texto LIKE 'crie quests a partir%'") is not None)

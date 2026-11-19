@@ -351,6 +351,11 @@ class OmaRpgApp(App[None]):
         elif ev == "rascunho":
             self.avisar(Text.assemble((ic("mestre") + " ", a("cyan")), (f"rascunho #{d['id']} do Mestre", a("texto")),
                                       (" · nada vale XP até você aprovar", a("mudo"))))
+        elif ev == "pedido_pasta":
+            from oma_rpg.ui.dialogos import PedidoPasta
+            pid = d.get("id")
+            self.mostrar_dialogo(PedidoPasta(str(d.get("caminho", "")), str(d.get("motivo", ""))),
+                                 lambda r: self.pedir("responder_pedido", {"id": pid, "resposta": r or "negar"}))
         elif ev == "titulo":
             self.avisar(Text.assemble((ic("coroa") + " ", a("yellow")), ("título destravado: ", a("texto")), (d["titulo"], f"bold {a('yellow')}")), 8)
         elif ev == "desconectado":
@@ -783,6 +788,11 @@ class OmaRpgApp(App[None]):
     def action_ajuda(self) -> None:
         from oma_rpg.ui.dialogos import Teclas
         self.push_screen(Teclas("", [], completa=True))
+
+    def abrir_pastas(self) -> None:
+        from oma_rpg.ui.dialogos import Pastas
+        if len(self.screen_stack) == 1:
+            self.push_screen(Pastas())
 
     def abrir_repos(self) -> None:
         from oma_rpg.ui.dialogos import Repos

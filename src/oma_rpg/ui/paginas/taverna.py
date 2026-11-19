@@ -6,6 +6,7 @@ O TextArea só é importado quando a taverna abre (memória)."""
 from __future__ import annotations
 
 import json
+import re
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -18,7 +19,8 @@ from oma_rpg.ui import desenho as D
 from oma_rpg.ui.base import Janela, Pagina, pagina_de
 from oma_rpg.ui.icones import GIRO, ic
 from oma_rpg.ui.lista import Lista
-from oma_rpg.ui.widgets import Pintado
+from oma_rpg.ui.dialogos import _curto
+from oma_rpg.ui.widgets import Botao, Pintado
 
 
 class Mensagem(TextArea):
@@ -209,22 +211,41 @@ class JanelaRascunhosT(Janela):
 class JanelaPermissoes(Janela):
     NOME = "permissoes"
     FOCAVEL = True
+    DEFAULT_CSS = "JanelaPermissoes #b-pastas { margin-top: 1; }"
 
     def compose(self) -> ComposeResult:
         yield Pintado(self._desenhar)
+        yield Botao("P  pastas que o Mestre lê", id="b-pastas")
 
     def pintar(self) -> None:
-        self.titulo("o que o Mestre pode fazer")
+        self.titulo("o que o Mestre pode fazer", "P pastas")
         self.query_one(Pintado).pintar()
+
+    def on_botao_apertado(self, ev: Botao.Apertado) -> None:
+        ev.stop()
+        self.app.abrir_pastas()
+
+    def rodape(self):
+        return [("P", "pastas", "noop"), ("enter", "pastas", "noop")]
 
     def _desenhar(self, w: int) -> Text:
         a = self.app
         linhas = [Text("")]
+        ps = C.pastas(a.b, a.agora())
+        n = len(ps)
         for ok, verbo, txt in ((True, "ler", "status, quests, histórico"), (True, "criar", "rascunhos de quest"),
-                               (True, "sugerir", "estimativas e prazos"), (False, "aprovar", "nunca: só você aprova"),
+                               (True, "sugerir", "estimativas e prazos"),
+                               (bool(n), "pastas", f"{n} liberada{'s' if n != 1 else ''}, só leitura" if n else "nenhuma: P libera"),
+                               (False, "aprovar", "nunca: só você aprova"),
                                (False, "concluir", "nunca: só pomodoro e commit"), (False, "mexer em XP", "nunca: tabela do jogo")):
             linhas.append(Text.assemble(("✓ " if ok else "✗ ", a.cor("green") if ok else a.cor("red")),
                                         (f"{verbo:<12}", f"bold {a.cor('forte')}"), (txt, a.cor("mudo"))))
+            if verbo == "pastas":
+                for p in ps[:4]:
+                    linhas.append(Text("  " + _curto(p["caminho"]) + (" (uma vez)" if p["modo"] == "uma_vez" else ""),
+                                       style=a.cor("texto"), no_wrap=True, overflow="ellipsis"))
+                if n > 4:
+                    linhas.append(Text(f"  e mais {n - 4}", style=a.cor("mudo")))
             linhas.append(Text(""))
         linhas.append(Text("contrato: oma-rpg --json (ver README)", style=a.cor("mudo")))
         return D.juntar(linhas)
@@ -240,7 +261,7 @@ class PaginaTaverna(Pagina):
         "permissoes": {"esq": "conversa", "cima": "rascunhos-t"},
     }
     BINDINGS = [Binding("a", "aprovar", show=False), Binding("e", "editar", show=False), Binding("d", "descartar", show=False),
-                Binding("A,shift+a", "aprovar_todos", show=False)]
+                Binding("A,shift+a", "aprovar_todos", show=False), Binding("P,shift+p", "pastas", show=False)]
     DEFAULT_CSS = "PaginaTaverna JanelaConversa { width: 90; } PaginaTaverna #t-dir { width: 1fr; }"
 
     def compose(self) -> ComposeResult:
@@ -271,8 +292,25 @@ class PaginaTaverna(Pagina):
         if m is None or self.app.mestre_estado() == "ausente":
             self.app.avisar_erro("O Claude Code não está instalado: a taverna precisa do comando claude.")
             return
-        m.enviar(texto)
+        nova = pasta_na_mensagem(self.app, texto)
+        if nova:
+            from oma_rpg.ui.dialogos import PedidoPasta
+
+            def resposta(r):
+                if r in ("sempre", "uma_vez"):
+                    self.app.pedir("pasta_adicionar", {"caminho": nova, "modo": r}, lambda ok, _: self._mandar(texto))
+                else:
+                    self._mandar(texto)
+            self.app.push_screen(PedidoPasta(nova, "a mensagem cita esta pasta"), resposta)
+            return
+        self._mandar(texto)
+
+    def _mandar(self, texto: str) -> None:
+        self.app.mestre.enviar(texto)
         self._giro.resume()
+
+    def action_pastas(self) -> None:
+        self.app.abrir_pastas()
 
     def rodape_pagina(self):
         return [("enter", "enviar", "noop"), ("a", "aprovar", "aprovar"), ("e", "editar", "editar"), ("d", "descartar", "descartar")]
@@ -299,6 +337,28 @@ class PaginaTaverna(Pagina):
         q = self._rascunho()
         if q:
             self.app.pedir("descartar_rascunho", {"id": q["id"]})
+
+
+CAMINHO = re.compile(r"(?:(?<=\s)|^)(~/[^\s,;:\"'()<>]+|/[^\s,;:\"'()<>]+)")
+
+
+def pasta_na_mensagem(app, texto: str) -> str:
+    """A primeira pasta que a mensagem cita, existe, pode ser liberada e ainda não está liberada (senão, vazio)."""
+    from oma_rpg.nucleo import pastas
+    from oma_rpg.nucleo.jogo import ErroJogo
+    liberadas = C.caminhos_liberados(app.b, app.agora())
+    for m in CAMINHO.finditer(texto):
+        bruto = m.group(1).rstrip(".!?")
+        try:
+            alvo = pastas.pasta_pedida(bruto)
+            pastas.validar_raiz(alvo)
+        except (ErroJogo, OSError):
+            continue
+        try:
+            pastas.resolver(alvo, liberadas)
+        except ErroJogo:
+            return alvo
+    return ""
 
 
 PAGINA = PaginaTaverna
