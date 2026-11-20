@@ -32,6 +32,12 @@ EXEMPLOS = {
 }
 
 
+def _perfil_preenchido(p: dict | None) -> bool:
+    if not isinstance(p, dict):
+        return False
+    return any(bool(v) for k, v in p.items() if k not in ("altura_cm", "peso_kg", "treina") or v)
+
+
 def _mods_texto(a, cid: str) -> str:
     mods = a.cfg.classe_atributos(cid)
     pos = [f"+1 {ATTR_SIGLAS[k]}" for k, v in mods.items() if v > 0]
@@ -234,11 +240,13 @@ class Criar(Screen):
         from oma_rpg.ui.dialogos import QuestionarioDialogo
 
         def depois(res) -> None:
-            if isinstance(res, dict):
+            if _perfil_preenchido(res):
                 self.perfil = res
                 self.query_one("#questionario", Botao).label = "Q  sobre você ✓"
                 self.query_one(Rodape).pintar()
                 self.query_one("#nome", Input).focus()
+            elif isinstance(res, dict):
+                self.app.avisar("preencha ao menos um campo do questionário")
         classe = self.query_one(Detalhes).classe
         self.app.push_screen(QuestionarioDialogo(self.perfil, classe=classe), depois)
 
@@ -262,12 +270,16 @@ class Criar(Screen):
             self.query_one(f"#{alvo}").focar_entrada()
 
     def action_criar(self) -> None:
+        if not _perfil_preenchido(self.perfil):
+            self.app.avisar("preencha o 1º questionário antes de criar o herói")
+            self.action_questionario()
+            return
         nome = self.query_one("#nome", Input).value.strip()
         if not nome:
             self.query_one("#nome", Input).focus()
             return
         classe = self.query_one(Detalhes).classe
-        self.dismiss((nome, classe, self.perfil) if self.perfil else (nome, classe))
+        self.dismiss((nome, classe, self.perfil))
 
     def action_fechar_criacao(self) -> None:
         self.dismiss(None)

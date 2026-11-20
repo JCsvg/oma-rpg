@@ -384,6 +384,8 @@ async def test_taverna_conversa_e_mestre_so_cria_rascunho(app):
 
 # ---------------------------------------------------------------- 1 · criação de personagem
 async def test_criar_heroi(app_vazio):
+    from oma_rpg.ui.dialogos import QuestionarioDialogo
+
     app = app_vazio
     async with app.run_test(size=G) as pilot:
         await pilot.pause(0.5)
@@ -391,19 +393,34 @@ async def test_criar_heroi(app_vazio):
         await pilot.press("down", "down", "down", "down")
         await pilot.pause(0.1)
         assert app.screen.query_one("Detalhes").classe == "gamer"
+        # Sem preencher o 1º questionário, tentar criar abre o questionário
         await pilot.press("tab")
         inp = app.screen.query_one("#nome")
         inp.value = "Leo"
         await pilot.press("enter")
-        assert await esperar(pilot, lambda: heroi(app) is not None and app.pagina_nome == "painel")
-        assert heroi(app)["nome"] == "Leo" and heroi(app)["classe"] == "gamer" and heroi(app)["hp"] == 100
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, QuestionarioDialogo)
+        app.screen.query_one("#q-ocupacao").value = "Computação"
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        await pilot.press("enter")
+        assert await esperar(pilot, lambda: heroi(app) is not None and app.pagina_nome == "taverna")
+        assert heroi(app)["nome"] == "Leo" and heroi(app)["classe"] == "gamer" and heroi(app)["hp"] >= 100
 
 
 async def test_criar_mistico_tira_a_carta_do_dia(app_vazio):
+    from oma_rpg.ui.dialogos import QuestionarioDialogo
+
     app = app_vazio
     async with app.run_test(size=G) as pilot:
         await pilot.pause(0.5)
-        await pilot.press("tab", "enter")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, QuestionarioDialogo)
+        app.screen.query_one("#q-ocupacao").value = "Estudante"
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        await pilot.press("enter")
         assert await esperar(pilot, lambda: type(app.screen).__name__ == "Carta")
         await pilot.press("space")
         await pilot.pause(0.2)

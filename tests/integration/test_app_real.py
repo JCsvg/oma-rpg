@@ -37,10 +37,14 @@ async def test_interface_e_servico_de_ponta_a_ponta(tmp_path, cfg, relogio):
             await pilot.pause(0.6)
             assert cliente.papel == "jogador"
             assert type(app.screen).__name__ == "Criar"
-            await pilot.press("down", "tab")
+            await pilot.press("down", "enter")
+            await pilot.pause(0.2)
+            app.screen.query_one("#q-ocupacao").value = "Computação"
+            await pilot.press("enter")
+            await pilot.pause(0.2)
             app.screen.query_one("#nome").value = "yahiro"
             await pilot.press("enter")
-            assert await esperar(pilot, lambda: app.pagina_nome == "painel", 5)
+            assert await esperar(pilot, lambda: app.pagina_nome == "taverna", 5)
             assert C.heroi(app.b)["classe"] == "programa"
             await pilot.press("alt+2")
             await pilot.pause(0.3)
