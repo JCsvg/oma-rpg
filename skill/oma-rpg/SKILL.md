@@ -20,6 +20,7 @@ Só pelo CLI, sempre com `--json`:
 - `oma-rpg pastas --json`: lista as pastas de estudo que o usuário liberou para leitura.
 - `oma-rpg ls PASTA --json`: lista arquivos e subpastas dentro de uma pasta liberada (em pasta nova, o comando pergunta ao usuário na Taverna se libera).
 - `oma-rpg ver ARQUIVO [--texto] --json`: lê um arquivo dentro de uma pasta liberada. PDFs grandes mostram só nome e tamanho; passe `--texto` só quando o usuário pedir o conteúdo daquele arquivo.
+- `oma-rpg perfil --estrategia "..." [--atributos "for=1,agi=2,vig=2,int=3,con=2,pre=1"] [--pericias "P1,P2,..."] --json`: grava a síntese do 2º questionário e uma proposta opcional para o jogador aprovar na aba Status.
 
 `--est` é a estimativa em pomodoros de 25 min (1 a 8). `--dif`: 1 fácil, 2 média, 3 difícil. `--prio`: 1 baixa, 2 média, 3 alta. `--pericias` associa 1 ou mais perícias à quest (se for nova, entra como sugerida para o usuário aprovar). `--desc` deve explicar **como resolver a tarefa** (passo a passo objetivo, arquivos/exercícios/critério de pronto), e não uma dica vaga. `--depende-de` aceita IDs separados por vírgula para criar trilhas com ramos e convergências (um ramo que precisa de mais de uma trilha anterior para desbloquear).
 
@@ -34,6 +35,11 @@ Quests não precisam obrigatoriamente de pomodoro para concluir (ex.: treino na 
 - Fazer commit para gerar XP. Commit com o trailer `Co-Authored-By: Claude` vale 0 xp e o jogo registra o motivo.
 
 Se o usuário pedir algo da lista proibida, diga que ele faz isso pela interface: `a` aprova o rascunho na tela de quests ou na taverna, `espaço` conclui a quest.
+
+## 2º questionário de perfil
+
+- Quando o jogador abrir a conversa com o resumo do 1º questionário (ou pedir `/entrevista`), identifique lacunas (hobbies, dificuldades reais para estudar e cumprir metas, métodos eficientes para ele, horários) e faça de 3 a 5 perguntas objetivas.
+- Ao fechar com o jogador, grave a estratégia com `oma-rpg perfil --estrategia "..." --json`. Se fizer sentido recalibrar os 5 pontos de personalidade (base 1, faixa `0..3`, soma `11`, sem os modificadores de classe) ou até 5 perícias iniciais de nível 1, passe `--atributos` e `--pericias` como proposta para o jogador aprovar na aba Status.
 
 ## Como trabalhar
 

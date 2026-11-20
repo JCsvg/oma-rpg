@@ -32,12 +32,16 @@ ARGS_MESTRE = {
     "rascunho": [{"titulo": "Seção 2.1 do TCC", "materia": "TCC", "est": 3, "dif": 3, "arco": "TCC",
                   "prazo": "2026-11-20", "porque": "a parte mais longa"}],
     "editar_rascunho": [{"id": 0, "est": 2}],
+    "salvar_entrevista": [{"estrategia": "Blocos de 25m com revisão ativa.",
+                           "atributos": {"for": 1, "agi": 2, "vig": 2, "int": 3, "con": 2, "pre": 1},
+                           "pericias": ["Programação", "Inglês"]}],
 }
 
 
 def test_papel_mestre_so_le_e_cria_rascunho():
-    # pedir_pasta só registra o pedido; quem libera é o jogador (test_pastas)
-    assert DO_MESTRE == {"ping", "status", "quests", "historico", "rascunho", "editar_rascunho", "pastas", "pedir_pasta"}
+    # pedir_pasta só registra o pedido; salvar_entrevista só grava estratégia e proposta (não muda herói)
+    assert DO_MESTRE == {"ping", "status", "quests", "historico", "rascunho", "editar_rascunho",
+                         "pastas", "pedir_pasta", "salvar_entrevista"}
 
 
 @pytest.mark.parametrize("cmd", sorted(set(COMANDOS) - DO_MESTRE))

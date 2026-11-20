@@ -12,6 +12,7 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Input, Static
 
+from oma_rpg.nucleo.regras import ATTR_SIGLAS
 from oma_rpg.ui import desenho as D
 from oma_rpg.ui.base import Janela
 from oma_rpg.ui.fonte import grande
@@ -29,6 +30,13 @@ EXEMPLOS = {
     "polimata": ["perícias sobem +25% mais rápido", "10% chance de crítico (+50% XP)", "fichamento turbina próxima quest"],
     "monge": ["confirmar quest sem pomodoro +30%", "concluir quest cura +3 de HP", "disciplina reduz penalidades"],
 }
+
+
+def _mods_texto(a, cid: str) -> str:
+    mods = a.cfg.classe_atributos(cid)
+    pos = [f"+1 {ATTR_SIGLAS[k]}" for k, v in mods.items() if v > 0]
+    neg = [f"{v} {ATTR_SIGLAS[k]}" for k, v in mods.items() if v < 0]
+    return " · ".join(pos + neg)
 
 
 class ListaClasses(Janela):
@@ -51,7 +59,7 @@ class ListaClasses(Janela):
         t.append(c["nome"], style=f"bold {a.cor('forte')}")
         linhas = [t, Text("     " + c["tema"], style=a.cor("mudo")),
                   Text.assemble(("     poder: ", a.cor(c["cor"])), (c["poder"], a.cor(c["cor"]))),
-                  Text(f"     hp {c['hp']}  ·  mana {c['mp']}", style=a.cor("mudo")), Text(""), Text("")]
+                  Text(f"     hp {c['hp']} · mana {c['mp']} · {_mods_texto(a, cid)}", style=a.cor("mudo")), Text(""), Text("")]
         if sel:
             linhas = [Text("▌", style=a.cor(c["cor"])) + l[1:] if l.plain else l for l in linhas[:4]] + linhas[4:]
         return linhas
@@ -89,7 +97,9 @@ class Detalhes(Janela):
         ret = D.moldura(a, [Text(""), Text(ic(cid), style=cor)] + [Text(l, style=cor) for l in grande(c["sigla"])] + [Text("")],
                         16, "", "texto", fundo="painel")
         direita = [Text(l, style=f"bold {cor}") for l in grande(c["nome"])]
-        direita += [Text(""), Text(c["tema"], style=a.cor("texto")), Text(""), Text("poder da classe", style=a.cor("mudo")),
+        direita += [Text(""), Text(c["tema"], style=a.cor("texto")),
+                    Text(f"atributos da classe: {_mods_texto(a, cid)}", style=a.cor("mudo")), Text(""),
+                    Text("poder da classe", style=a.cor("mudo")),
                     Text.assemble((c["poder_titulo"] + ": ", f"bold {cor}"), (c["poder_txt"], a.cor("texto")))]
         linhas = [Text("")]
         for i in range(max(len(ret), len(direita))):
@@ -225,7 +235,8 @@ class Criar(Screen):
                 self.perfil = res
                 self.query_one("#questionario", Botao).label = "Q  sobre você ✓"
                 self.query_one(Rodape).pintar()
-        self.app.push_screen(QuestionarioDialogo(self.perfil), depois)
+        classe = self.query_one(Detalhes).classe
+        self.app.push_screen(QuestionarioDialogo(self.perfil, classe=classe), depois)
 
     def action_alternar(self) -> None:
         i = self.query_one("#nome", Input)

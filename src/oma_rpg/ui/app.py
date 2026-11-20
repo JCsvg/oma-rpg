@@ -174,7 +174,10 @@ class OmaRpgApp(App[None]):
             def depois(ok, res):
                 if ok:
                     self.ler_dados()
-                    self.abrir_pagina("painel", foco=True)
+                    if perfil:
+                        self.iniciar_entrevista_perfil()
+                    else:
+                        self.abrir_pagina("painel", foco=True)
                     self._carta_do_dia_se_preciso()
                 else:
                     self.avisar_erro(res)
@@ -184,6 +187,27 @@ class OmaRpgApp(App[None]):
                 args["perfil"] = perfil
             self.pedir("criar_heroi", args, depois)
         self.push_screen(Criar(), fim)
+
+    def iniciar_entrevista_perfil(self) -> None:
+        """Abre a Taverna e passa o 1º questionário para o agente padrão conduzir o 2º questionário."""
+        from oma_rpg.mestre import montar_prompt_entrevista
+        self.ler_dados()
+        self.abrir_pagina("taverna", foco=True)
+        m = self.mestre
+        if m is None or self.mestre_estado() == "ausente":
+            self.pedir("taverna", {"papel": "sistema",
+                                   "texto": "1º questionário salvo. Pressione M para escolher o agente e digite /entrevista para o 2º questionário."})
+            return
+        if self.mestre_estado() == "pensando":
+            return
+        m.parar()
+        m.sessao = None
+        self.estado.definir("taverna_sessao", None)
+        m.enviar(montar_prompt_entrevista(self.st))
+        try:
+            self.pagina_atual.pintar()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------ serviço e dados
     def _conectar(self) -> None:

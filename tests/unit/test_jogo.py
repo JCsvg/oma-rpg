@@ -219,7 +219,7 @@ def test_quest_so_vale_com_pomodoro(heroi):
     pomodoro(j, quest=q2["id"])
     antes = h(j)["xp_total"]
     r = j.concluir_quest(q2["id"])
-    assert r["xp"] == 41 and r["cheio"] and h(j)["xp_total"] - antes == 41
+    assert r["xp"] == 42 and r["cheio"] and h(j)["xp_total"] - antes == 42  # 41 + 2% de Int (+1 da classe)
 
 
 def test_chefe_do_arco_quando_todas_feitas(heroi):
@@ -356,7 +356,7 @@ def test_loja_compra_usa_e_equipa(heroi):
     with pytest.raises(ErroJogo):
         j.comprar("elixir")
     j.comprar("pocao_hp", 2)
-    assert h(j)["bits"] == 140 and C.mochila(j.b)["pocao_hp"] == 2
+    assert h(j)["bits"] == 138 and C.mochila(j.b)["pocao_hp"] == 2  # Pre 0 (-1 da classe): +1% no preço
     j.usar_item("pocao_hp")
     assert h(j)["hp"] == 80
     j.comprar("titulo_cafe")
@@ -395,7 +395,7 @@ def test_gamer_combo_vai_a_2_e_quebra_com_intervalo(jogo):
     j.b.x("UPDATE heroi SET seguidos = 9, seguidos_dia = ?, ultimo_fim = ?", (j.hoje(), j.agora()))
     assert C.combo_de(j.cfg, h(j), j.P(), j.agora()) == 1.9
     j.b.x("UPDATE heroi SET seguidos = 12")
-    assert C.combo_de(j.cfg, h(j), j.P(), j.agora()) == 2.0
+    assert C.combo_de(j.cfg, h(j), j.P(), j.agora()) == 2.02  # 2.0 + 0.02 de Agi (+1 da classe)
     assert C.combo_de(j.cfg, h(j), j.P(), j.agora() + 46 * 60) == 1.0
 
 
@@ -404,7 +404,7 @@ def test_otaku_virada_com_hp_baixo(jogo):
     j.criar_heroi("mika", "otaku")
     j.b.x("UPDATE heroi SET hp = 20")
     pomodoro(j)
-    assert j.b.um("SELECT xp FROM pomodoros")[0] == 48
+    assert j.b.um("SELECT xp FROM pomodoros")[0] == 49  # 24 * 1.02 (Con +1 da classe) * 2 (virada)
 
 
 def test_mistico_carta_do_dia_muda_os_bits(jogo):

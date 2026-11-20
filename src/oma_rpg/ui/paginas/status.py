@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 
 from oma_rpg.nucleo import consultas as C
 from oma_rpg.nucleo import regras
@@ -58,9 +60,13 @@ class JanelaAtributos(Janela):
         a = self.app
         k, nome, sig, desc, val, _ = it
         w = max(24, est.largura)
-        barra = D.barra(a, min(12, val), 12, 12, "accent")
+        barra = D.barra(a, max(0, min(12, val)), 12, 12, "accent")
         esq = Text.assemble((f"{sig:<4}", f"bold {a.cor('accent')}"), (f"{nome:<13}", f"bold {a.cor('forte')}"), barra)
-        dir_ = Text(f" {val:>2}", style=f"bold {a.cor('forte')}")
+        st_h = a.st.get("heroi") or {}
+        cid = st_h.get("classe_id")
+        mod = a.cfg.classe_atributos(cid).get(k, 0) if cid and cid in a.cfg["classes"] else 0
+        tag = f" ({mod:+d} cls)" if mod else ""
+        dir_ = Text.assemble((f" {val:>2}", f"bold {a.cor('forte')}"), (tag, a.cor("mudo")))
         return [D.linha_lr(esq, dir_, w), Text("    " + desc, style=a.cor("mudo"), no_wrap=True, overflow="ellipsis"), Text("")]
 
     def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
@@ -124,33 +130,79 @@ class JanelaPericias(Janela):
 class JanelaPerfil(Janela):
     NOME = "status-perfil"
     FOCAVEL = True
-    DEFAULT_CSS = "JanelaPerfil { height: 13; } JanelaPerfil #b-perfil { margin-top: 1; }"
+    DEFAULT_CSS = ("JanelaPerfil { height: 17; } JanelaPerfil #st-perfil-scroll { height: 1fr; } "
+                   "JanelaPerfil #st-perfil-acoes { height: 3; margin-top: 1; } "
+                   "JanelaPerfil #st-perfil-acoes Botao { margin-right: 1; }")
 
     def compose(self) -> ComposeResult:
-        yield Pintado(self._desenhar, id="st-perfil-txt")
-        yield Botao("E  editar questionário de perfil", id="b-perfil")
+        with VerticalScroll(id="st-perfil-scroll"):
+            yield Pintado(self._desenhar, id="st-perfil-txt")
+        with Horizontal(id="st-perfil-acoes"):
+            yield Botao("E  questionário 1", id="b-perfil")
+            yield Botao("I  2º questionário (Mestre)", id="b-entrevista")
+            yield Botao("A  aprovar proposta", id="b-aprovar-prop", classes="cheio")
+            yield Botao("X  descartar", id="b-descartar-prop")
 
     def pintar(self) -> None:
-        self.titulo("sobre você", "e edita · contexto do Mestre")
+        p = C.perfil(self.app.b)
+        tem_prop = bool(p.get("proposta_mestre"))
+        self.titulo("sobre você", "proposta do Mestre (a/x)" if tem_prop else "e edita · i 2º questionário")
+        self.query_one("#b-aprovar-prop", Botao).display = tem_prop
+        self.query_one("#b-descartar-prop", Botao).display = tem_prop
         self.query_one(Pintado).pintar()
 
     def _desenhar(self, w: int) -> Text:
         a = self.app
         p = C.perfil(a.b)
         rel = (p.get("relatorio") or "").strip()
-        if not rel:
-            return Text("\nquestionário ainda não preenchido (pressione e para preencher)", style=a.cor("mudo"))
+        mestre_txt = (p.get("perfil_mestre") or "").strip()
+        prop_raw = (p.get("proposta_mestre") or "").strip()
+        if not rel and not mestre_txt and not prop_raw:
+            return Text("\nquestionário ainda não preenchido (e preenche · i 2º questionário)", style=a.cor("mudo"))
         linhas = [Text("")]
-        for l in rel.splitlines():
-            linhas.extend(D.quebrar(l, max(20, w - 2), a.cor("texto")))
+        larg = max(20, w - 3)
+        if rel:
+            for l in rel.splitlines():
+                linhas.extend(D.quebrar(l, larg, a.cor("texto")))
+        if mestre_txt:
+            linhas.append(Text(""))
+            linhas.append(Text("2º questionário · estratégia do Mestre:", style=f"bold {a.cor('cyan')}"))
+            for l in mestre_txt.splitlines():
+                linhas.extend(D.quebrar(l, larg, a.cor("texto")))
+        if prop_raw:
+            try:
+                prop = json.loads(prop_raw)
+            except ValueError:
+                prop = {}
+            if prop:
+                linhas.append(Text(""))
+                linhas.append(Text("Proposta pendente do Mestre (A aprova · X descarta):", style=f"bold {a.cor('yellow')}"))
+                if "atributos" in prop:
+                    at = prop["atributos"]
+                    txt_at = " · ".join(f"{regras.ATTR_SIGLAS[k]} {at[k]}" for k in regras.ATTR_CHAVES if k in at)
+                    linhas.extend(D.quebrar("Personalidade (5 pts): " + txt_at, larg, a.cor("yellow")))
+                if "pericias" in prop:
+                    linhas.extend(D.quebrar("Perícias (nível 1): " + ", ".join(prop["pericias"]), larg, a.cor("yellow")))
         return D.juntar(linhas)
 
     def on_botao_apertado(self, ev: Botao.Apertado) -> None:
         ev.stop()
-        self.pg.action_editar_perfil()
+        bid = ev.botao.id
+        if bid == "b-perfil":
+            self.pg.action_editar_perfil()
+        elif bid == "b-entrevista":
+            self.pg.action_entrevista()
+        elif bid == "b-aprovar-prop":
+            self.pg.action_aprovar_proposta()
+        elif bid == "b-descartar-prop":
+            self.pg.action_descartar_proposta()
 
     def rodape(self):
-        return [("e", "editar questionário", "noop")]
+        p = C.perfil(self.app.b)
+        itens = [("e", "editar Q1", "noop"), ("i", "2º questionário", "noop")]
+        if p.get("proposta_mestre"):
+            itens += [("a", "aprovar proposta", "noop"), ("x", "descartar", "noop")]
+        return itens
 
 
 class PaginaStatus(Pagina):
@@ -168,6 +220,7 @@ class PaginaStatus(Pagina):
         Binding("a", "aprovar_pericia", show=False),
         Binding("x,delete", "remover_pericia", show=False),
         Binding("e", "editar_perfil", show=False),
+        Binding("i", "entrevista", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -189,29 +242,48 @@ class PaginaStatus(Pagina):
                              lambda nome: nome and self.app.pedir("nova_pericia", {"nome": nome}))
 
     def action_aprovar_pericia(self) -> None:
+        if self.app.nome_janela(self.app.focused) == "status-perfil":
+            self.action_aprovar_proposta()
+            return
         p = self.query_one(JanelaPericias).atual()
         if p and p["estado"] != "aprovada":
             self.app.pedir("aprovar_pericia", {"id": p["id"]})
 
     def action_remover_pericia(self) -> None:
+        if self.app.nome_janela(self.app.focused) == "status-perfil":
+            self.action_descartar_proposta()
+            return
         if self.app.nome_janela(self.app.focused) != "status-pericias":
             return
         p = self.query_one(JanelaPericias).atual()
         if p:
             self.app.pedir("remover_pericia", {"id": p["id"]})
 
+    def action_aprovar_proposta(self) -> None:
+        if C.perfil(self.app.b).get("proposta_mestre"):
+            self.app.pedir("aplicar_proposta_perfil", {})
+
+    def action_descartar_proposta(self) -> None:
+        if C.perfil(self.app.b).get("proposta_mestre"):
+            self.app.pedir("descartar_proposta_perfil", {})
+
+    def action_entrevista(self) -> None:
+        self.app.iniciar_entrevista_perfil()
+
     def action_editar_perfil(self) -> None:
         from oma_rpg.ui.dialogos import QuestionarioDialogo
         atual = C.perfil(self.app.b)
+        cid = (self.app.st.get("heroi") or {}).get("classe_id", "")
 
         def depois(res) -> None:
             if isinstance(res, dict):
                 self.app.pedir("salvar_perfil", res)
-        self.app.push_screen(QuestionarioDialogo(atual, editando=True), depois)
+        self.app.push_screen(QuestionarioDialogo(atual, editando=True, classe=cid), depois)
 
     def rodape_pagina(self):
         return [("+", "gastar atributo", "gastar"), ("n", "nova perícia", "nova_pericia"),
-                ("a", "aprovar perícia", "aprovar_pericia"), ("e", "editar perfil", "editar_perfil")]
+                ("a", "aprovar", "aprovar_pericia"), ("e", "editar Q1", "editar_perfil"),
+                ("i", "2º questionário", "entrevista")]
 
 
 PAGINA = PaginaStatus

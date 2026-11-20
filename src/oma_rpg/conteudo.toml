@@ -52,6 +52,7 @@ poder_titulo = "Tiragem diária"
 poder_txt = "Toda manhã uma carta sorteada dá um buff e um debuff ao dia."
 hp = 80
 mp = 80
+atributos = { pre = 1, con = 1, for = -1 }
 ramos = ["Arcanos da Mente", "Arcanos do Destino", "Arcanos do Corpo"]
 titulos = ["Aprendiz", "Leitor de Cartas", "Vidente", "Oráculo", "Arcano", "Mestre do Tarô"]
 dia = [
@@ -72,6 +73,7 @@ poder_titulo = "CI verde"
 poder_txt = "Commits feitos dentro de um pomodoro vinculado valem mais XP."
 hp = 100
 mp = 60
+atributos = { int = 1, agi = 1, pre = -1 }
 ramos = ["Backend", "DevOps", "Hack"]
 titulos = ["Estagiário", "Dev Júnior", "Dev Pleno", "Dev Sênior", "Tech Lead", "Staff"]
 dia = [
@@ -92,6 +94,7 @@ poder_titulo = "Carteira"
 poder_txt = "Bits guardados rendem juros todo dia em que você cumpre a meta."
 hp = 90
 mp = 70
+atributos = { pre = 1, con = 1, vig = -1 }
 ramos = ["Capital", "Mercado", "Operação"]
 titulos = ["Estagiário de Vendas", "Microempreendedor", "Sócio", "CEO", "Investidor-Anjo", "Magnata"]
 dia = [
@@ -112,6 +115,7 @@ poder_titulo = "Fadiga"
 poder_txt = "Pausa bem feita dá bônus; passar do teto diário vira overtraining."
 hp = 120
 mp = 40
+atributos = { for = 1, vig = 1, int = -1 }
 ramos = ["Treino", "Recuperação", "Dieta"]
 titulos = ["Frango", "Marombeiro", "Shape em Construção", "Monstro", "Fisiculturista", "Lenda do Supino"]
 dia = [
@@ -132,6 +136,7 @@ poder_titulo = "Combo"
 poder_txt = "O combo vai mais longe: sobe até x2.0 (as outras classes param em x1.5)."
 hp = 100
 mp = 60
+atributos = { agi = 1, pre = 1, for = -1 }
 ramos = ["Speedrun", "Hardcore", "Grind"]
 titulos = ["Noob", "Casual", "Tryhard", "Pro Player", "Speedrunner", "Lenda"]
 dia = [
@@ -152,6 +157,7 @@ poder_titulo = "Arcos"
 poder_txt = "Cada matéria é um arco com episódios e chefe; com HP baixo vem a virada."
 hp = 90
 mp = 70
+atributos = { vig = 1, con = 1, for = -1 }
 ramos = ["Shounen", "Slice of Life", "Drama"]
 titulos = ["Novato", "Fã", "Weeb", "Senpai", "Sensei", "Protagonista"]
 dia = [
@@ -172,6 +178,7 @@ poder_titulo = "Sinergia"
 poder_txt = "Quests que treinam perícias ganham +25% de XP nas perícias e +10% de chance de crítico."
 hp = 85
 mp = 90
+atributos = { int = 1, con = 1, for = -1 }
 ramos = ["Erudição", "Síntese", "Maestria"]
 titulos = ["Curioso", "Aprendiz", "Generalista", "Estudioso", "Sábio", "Polímata"]
 dia = [
@@ -192,6 +199,7 @@ poder_titulo = "Disciplina"
 poder_txt = "Quests só confirmadas (academia, hábitos, rotina) valem +30% de XP e curam +3 de HP."
 hp = 110
 mp = 60
+atributos = { vig = 1, for = 1, pre = -1 }
 ramos = ["Zen", "Corpo", "Constância"]
 titulos = ["Noviço", "Praticante", "Asceta", "Discípulo", "Mestre Zen", "Iluminado"]
 dia = [

@@ -93,14 +93,18 @@ CREATE TABLE IF NOT EXISTS pedidos_pasta (id INTEGER PRIMARY KEY, caminho TEXT N
   estado TEXT NOT NULL DEFAULT 'pendente', motivo TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS perfil (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  ocupacao TEXT NOT NULL DEFAULT '', objetivos TEXT NOT NULL DEFAULT '',
+  ocupacao TEXT NOT NULL DEFAULT '', objetivos TEXT NOT NULL DEFAULT '', hobbies TEXT NOT NULL DEFAULT '',
   altura_cm INTEGER NOT NULL DEFAULT 0, peso_kg REAL NOT NULL DEFAULT 0,
   treina INTEGER NOT NULL DEFAULT 0, treino_tipo TEXT NOT NULL DEFAULT '', treino_freq TEXT NOT NULL DEFAULT '',
-  tempo_estudo TEXT NOT NULL DEFAULT '', atencao TEXT NOT NULL DEFAULT '',
+  tempo_estudo TEXT NOT NULL DEFAULT '', dificuldade_estudo TEXT NOT NULL DEFAULT '',
+  dificuldade_metas TEXT NOT NULL DEFAULT '', atencao TEXT NOT NULL DEFAULT '',
   estilo_estudo TEXT NOT NULL DEFAULT '', rotina TEXT NOT NULL DEFAULT '',
   estilo_vida TEXT NOT NULL DEFAULT '', sono TEXT NOT NULL DEFAULT '',
   obstaculos TEXT NOT NULL DEFAULT '', tamanho_bloco TEXT NOT NULL DEFAULT '',
-  relatorio TEXT NOT NULL DEFAULT '', atualizado REAL NOT NULL DEFAULT 0
+  pericias_iniciais TEXT NOT NULL DEFAULT '',
+  personalidade TEXT NOT NULL DEFAULT '', relatorio TEXT NOT NULL DEFAULT '',
+  perfil_mestre TEXT NOT NULL DEFAULT '', proposta_mestre TEXT NOT NULL DEFAULT '',
+  entrevista_estado TEXT NOT NULL DEFAULT '', atualizado REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS pericias (
   id INTEGER PRIMARY KEY, nome TEXT NOT NULL UNIQUE,
@@ -147,7 +151,9 @@ class Banco:
             if "pontos_attr" not in hcols:
                 self.c.execute("ALTER TABLE heroi ADD COLUMN pontos_attr INTEGER NOT NULL DEFAULT 0")
             pcols = {r[1] for r in self.c.execute("PRAGMA table_info(perfil)").fetchall()}
-            for pc in ("estilo_vida", "sono", "obstaculos", "tamanho_bloco"):
+            for pc in ("estilo_vida", "sono", "obstaculos", "tamanho_bloco", "hobbies",
+                       "dificuldade_estudo", "dificuldade_metas", "pericias_iniciais",
+                       "personalidade", "perfil_mestre", "proposta_mestre", "entrevista_estado"):
                 if pc not in pcols:
                     self.c.execute(f"ALTER TABLE perfil ADD COLUMN {pc} TEXT NOT NULL DEFAULT ''")
             if self.meta("versao") is None:

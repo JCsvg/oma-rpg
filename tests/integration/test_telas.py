@@ -667,3 +667,35 @@ async def test_status_atributos_pericias_e_perfil(app):
         await pilot.pause(0.2)
         assert isinstance(app.screen, QuestionarioDialogo)
         await pilot.press("escape")
+
+
+async def test_criar_heroi_com_questionario_abre_taverna_e_aprova_proposta(app_vazio):
+    from oma_rpg.ui.dialogos import QuestionarioDialogo
+
+    app = app_vazio
+    async with app.run_test(size=G) as pilot:
+        await pilot.pause(0.4)
+        assert type(app.screen).__name__ == "Criar"
+        await pilot.press("down")
+        await pilot.pause(0.1)
+        await pilot.press("shift+q")
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, QuestionarioDialogo)
+        app.screen.query_one("#q-ocupacao").value = "Ciência da Computação"
+        app.screen.query_one("#q-hobbies").value = "RPG e leitura"
+        app.screen.query_one("#q-tempo_estudo").value = "3h/dia"
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        app.screen.query_one("#nome").value = "JC"
+        await pilot.press("enter")
+        assert await esperar(pilot, lambda: app.pagina_nome == "taverna")
+        # MestreFalso responde ao 2º questionário e cria uma proposta de perfil
+        assert await esperar(pilot, lambda: bool(C.perfil(app.b).get("proposta_mestre")), 4)
+        await pilot.press("alt+8")
+        await pilot.pause(0.2)
+        assert app.pagina_nome == "status"
+        app.focar_janela("status-perfil")
+        await pilot.pause(0.1)
+        await pilot.press("a")
+        assert await esperar(pilot, lambda: C.perfil(app.b).get("proposta_mestre") == "", 3)
+        assert "blocos de 25 min" in C.perfil(app.b).get("perfil_mestre", "").lower()

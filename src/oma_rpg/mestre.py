@@ -66,24 +66,31 @@ def salvar_preferencia(agente: str, modelo: str = "") -> None:
 
 
 PERMITIDOS = ["Bash(oma-rpg status:*)", "Bash(oma-rpg quests:*)", "Bash(oma-rpg history:*)", "Bash(oma-rpg draft:*)",
-              "Bash(oma-rpg editar:*)", "Bash(oma-rpg pastas:*)", "Bash(oma-rpg ls:*)", "Bash(oma-rpg ver:*)"]
+              "Bash(oma-rpg editar:*)", "Bash(oma-rpg pastas:*)", "Bash(oma-rpg ls:*)", "Bash(oma-rpg ver:*)",
+              "Bash(oma-rpg perfil:*)"]
 FERRAMENTAS = "Bash,Read,Glob,Grep"
 BLOQUEADOS = ["Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Task"]
 PROMPT = (
     "Você é o Mestre do oma-rpg, um RPG de estudo e hábitos reais. Use a skill oma-rpg se ela estiver instalada. Para o "
-    "jogo, use só oma-rpg status, quests, history, draft e editar, sempre com --json. Antes de sugerir quests, leia o "
-    "perfil completo do jogador (ocupação, objetivos, atividade física, tempo de estudo, atenção/foco, estilo e rotina), "
-    "os atributos (For, Agi, Vig, Int, Con, Pre) e as perícias no `oma-rpg status --json` para adaptar o tamanho e o tipo "
-    "das quests (incluindo hábitos físicos como academia, que podem ser concluídos só confirmando, sem pomodoro). Ao criar "
-    "rascunhos com draft, use --prio (1 baixa, 2 média, 3 alta), --pericias \"Pericia1,Pericia2\" (existentes ou novas "
-    "sugeridas para o JC aprovar), --desc com um passo a passo objetivo de COMO RESOLVER a tarefa (não uma dica vaga) e "
-    "--depende-de ID1,ID2 para montar campanhas com trilhas e ramos que exigem um ou mais pré-requisitos para desbloquear. "
-    "Para ver as pastas de estudo do JC, use oma-rpg pastas --json, oma-rpg ls PASTA --json e oma-rpg ver ARQUIVO --json; "
-    "dentro delas você também pode usar Read, Glob e Grep. Só leitura: não escreva, não edite, não rode outros comandos e "
-    "não delegue a subagentes. PDF grande: veja só nome e tamanho, e peça o texto (ver --texto) só do arquivo que o JC "
-    "quiser. Se a pasta não estiver liberada, peça ao JC para liberar na Taverna (tecla P). Você ajuda a definir quests "
-    "(rascunhos), mas não aprova, não conclui e não dá XP: a recompensa sai da tabela do jogo e o jogador aprova pela "
-    "interface. Responda em português do Brasil, curto, sem travessão, no tom da classe do herói."
+    "jogo, use só oma-rpg status, quests, history, draft, editar e perfil, sempre com --json. Antes de sugerir quests, leia o "
+    "perfil completo do jogador (ocupação, objetivos, hobbies, atividade física, tempo de estudo, dificuldades com estudo/metas, "
+    "atenção/foco, estilo e rotina), os atributos (For, Agi, Vig, Int, Con, Pre) e as perícias no `oma-rpg status --json` "
+    "para adaptar o tamanho e o tipo das quests (incluindo hábitos físicos como academia, que podem ser concluídos só "
+    "confirmando, sem pomodoro). Quando for conduzido o 2º questionário de perfil (após a criação do herói ou via "
+    "/entrevista), analise as lacunas do 1º questionário, faça de 3 a 5 perguntas objetivas e personalizadas (métodos de "
+    "estudo mais eficientes, gatilhos de foco, cumprimento de metas, hobbies e horários reais) e, ao fechar com o jogador, "
+    "grave a síntese com `oma-rpg perfil --estrategia \"...\" [--atributos \"for=...,agi=...,vig=...,int=...,con=...,pre=...\"] "
+    "[--pericias \"P1,P2,...\"] --json` (personalidade distribui 5 pontos sobre base 1 em 0..3 somando 11, sem contar bônus "
+    "de classe; até 5 perícias de nível 1). A proposta de atributos/perícias só vale depois que o jogador aprovar na tela "
+    "Status. Ao criar rascunhos com draft, use --prio (1 baixa, 2 média, 3 alta), --pericias \"Pericia1,Pericia2\" (existentes "
+    "ou novas sugeridas para o JC aprovar), --desc com um passo a passo objetivo de COMO RESOLVER a tarefa (não uma dica "
+    "vaga) e --depende-de ID1,ID2 para montar campanhas com trilhas e ramos que exigem um ou mais pré-requisitos para "
+    "desbloquear. Para ver as pastas de estudo do JC, use oma-rpg pastas --json, oma-rpg ls PASTA --json e oma-rpg ver "
+    "ARQUIVO --json; dentro delas você também pode usar Read, Glob e Grep. Só leitura: não escreva, não edite, não rode "
+    "outros comandos e não delegue a subagentes. PDF grande: veja só nome e tamanho, e peça o texto (ver --texto) só do "
+    "arquivo que o JC quiser. Se a pasta não estiver liberada, peça ao JC para liberar na Taverna (tecla P). Você ajuda a "
+    "definir quests (rascunhos), mas não aprova, não conclui e não dá XP: a recompensa sai da tabela do jogo e o jogador "
+    "aprova pela interface. Responda em português do Brasil, curto, sem travessão, no tom da classe do herói."
 )
 ATALHOS = {
     "/revisão": "Faça a revisão semanal: rode oma-rpg status --json e oma-rpg history --days 7 --json, diga em 3 linhas o "
@@ -91,8 +98,31 @@ ATALHOS = {
     "/revisao": "",
     "/rascunhos": "Rode oma-rpg quests --json e comente em uma linha cada rascunho que está esperando aprovação.",
     "/meta": "Rode oma-rpg status --json e sugira quantos pomodoros fazer ainda hoje, respeitando o teto diário e o HP.",
+    "/entrevista": "Conduza o 2º questionário de perfil: rode oma-rpg status --json, leia todas as respostas do 1º questionário "
+                   "e os atributos/perícias atuais, identifique lacunas (métodos de estudo eficientes para ele, gatilhos para "
+                   "cumprir metas, rotina e hobbies) e faça de 3 a 5 perguntas específicas. Quando ele responder, salve a "
+                   "estratégia e uma proposta opcional de atributos (0..3 somando 11) e até 5 perícias com oma-rpg perfil.",
 }
 ATALHOS["/revisao"] = ATALHOS["/revisão"]
+
+
+def montar_prompt_entrevista(st: dict) -> str:
+    """Monta a mensagem inicial automática para o agente conduzir o 2º questionário após o 1º."""
+    h = st.get("heroi") or {}
+    p = st.get("perfil") or {}
+    at = st.get("atributos") or {}
+    pers = ", ".join(x["nome"] for x in (st.get("pericias") or [])[:5]) or "nenhuma"
+    rel = (p.get("relatorio") or "").strip() or "questionário inicial em aberto"
+    at_txt = " · ".join(f"{k.upper()} {at.get(k, 1)}" for k in ("for", "agi", "vig", "int", "con", "pre"))
+    return (
+        f"Acabei de preencher o 1º questionário do perfil ({h.get('nome', 'herói')} · {h.get('classe', '')}). "
+        f"Conduza agora o 2º questionário para preencher lacunas e descobrir formas de estudo eficientes para mim.\n\n"
+        f"Resumo do 1º questionário:\n{rel}\n"
+        f"Atributos atuais (já com classe): {at_txt}\n"
+        f"Perícias atuais: {pers}\n\n"
+        f"Faça de 3 a 5 perguntas específicas baseadas nesse perfil. Quando eu responder, grave a síntese com "
+        f"`oma-rpg perfil` (e proponha ajustes nos 5 pts de atributos ou até 5 perícias se fizer sentido)."
+    )
 
 
 def expandir(texto: str) -> str:
@@ -195,6 +225,8 @@ def resumo_resultado(conteudo) -> str:
                 return f"{dados['arquivo']} ({dados['tamanho']} bytes)" + ("" if dados.get("conteudo") is not None else ", só metadados")
             if isinstance(dados, dict) and "pastas" in dados:
                 return f"{len(dados['pastas'])} pastas liberadas"
+            if isinstance(dados, dict) and "entrevista_estado" in dados:
+                return "perfil refinado salvo" + (" (proposta enviada)" if dados.get("proposta") else "")
             return "ok"
     except ValueError:
         pass
@@ -400,6 +432,24 @@ class MestreFalso(_Base):
         self.n += 1
         st = executar(jogo, "status", {}, "mestre")
         self._registrar("cli", "oma-rpg status --json", {"resultado": resumo_resultado(json.dumps({"ok": True, "dados": st}))})
+        low = texto.lower()
+        if "2º questionário" in low or "questionário do perfil" in low or "lacunas" in low:
+            try:
+                res = executar(jogo, "salvar_entrevista",
+                               {"estrategia": "Blocos de 25 min com checklists curtas, revisão ativa no fim do dia e pausa física.",
+                                "atributos": {"for": 1, "agi": 2, "vig": 2, "int": 3, "con": 2, "pre": 1},
+                                "pericias": ["Programação", "Raciocínio Lógico", "Inglês"]}, "mestre")
+                self._registrar("cli", "oma-rpg perfil --estrategia \"...\" --json",
+                                {"resultado": resumo_resultado(json.dumps({"ok": True, "dados": res}))})
+                self._registrar("mestre", "Li seu 1º questionário. Me diga: 1) Em que horário você rende melhor? "
+                                          "2) Prefere aprender resolvendo problemas ou lendo antes? "
+                                          "Já deixei uma estratégia inicial e uma proposta de atributos/perícias para aprovar no Status (alt+8).")
+            except ErroJogo as e:
+                self._registrar("mestre", f"Não consegui salvar a entrevista: {e}.")
+            for ev in jogo.soltar_eventos():
+                self.cliente.ao_evento(ev)
+            self._mudar("pronto")
+            return
         try:
             r = executar(jogo, "rascunho", {"titulo": f"Revisão de flashcards de Redes ({self.n})", "materia": "Redes",
                                             "est": 1, "dif": 1, "arco": "Redes", "porque": "você pediu de manhã; 1 pomodoro basta."},

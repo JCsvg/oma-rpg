@@ -28,7 +28,7 @@ import time
 from oma_rpg import __version__
 
 SUBCOMANDOS = ("servico", "serviço", "status", "quests", "history", "historico", "histórico", "draft", "rascunho", "editar",
-               "pastas", "ls", "ver")
+               "pastas", "ls", "ver", "perfil")
 
 
 def _saida(ok: bool, dados, como_json: bool, texto: str = "") -> int:
@@ -173,6 +173,20 @@ def cmd_editar(a) -> int:
     d["id"] = a.id
     ok, r = _pedir_mestre("editar_rascunho", d)
     t = f"rascunho #{r['id']} editado: +{r['xp_previsto']} xp, +{r['bits_previstos']} bits" if ok else ""
+    return _saida(ok, r, a.json, t)
+
+
+def cmd_perfil(a) -> int:
+    d = {"estrategia": a.estrategia}
+    if getattr(a, "atributos", None) is not None:
+        d["atributos"] = a.atributos
+    if getattr(a, "pericias", None) is not None:
+        d["pericias"] = a.pericias
+    ok, r = _pedir_mestre("salvar_entrevista", d)
+    if ok:
+        t = "perfil refinado salvo" + (" (proposta enviada para o jogador aprovar)" if r.get("proposta") else "")
+    else:
+        t = ""
     return _saida(ok, r, a.json, t)
 
 
@@ -334,6 +348,12 @@ def _parser_sub() -> argparse.ArgumentParser:
     v.add_argument("--texto", action="store_true", help="extrai o texto de um PDF (pdftotext)")
     v.add_argument("--json", action="store_true")
     v.set_defaults(f=cmd_ver)
+    pf = sub.add_parser("perfil", help="salva estratégia de estudo do 2º questionário e proposta de atributos/perícias")
+    pf.add_argument("--estrategia", "--notas", dest="estrategia", required=True, help="síntese da entrevista e formas de estudo eficientes")
+    pf.add_argument("--atributos", help="proposta opcional (base 1, soma 11, cada 0..3): for=1,agi=2,vig=2,int=3,con=2,pre=1")
+    pf.add_argument("--pericias", help="proposta opcional de até 5 perícias iniciais separadas por vírgula")
+    pf.add_argument("--json", action="store_true")
+    pf.set_defaults(f=cmd_perfil)
     return p
 
 

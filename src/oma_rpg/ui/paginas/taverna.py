@@ -156,7 +156,7 @@ class JanelaConversa(Janela):
             c.border_title = "mensagem"
             c.border_subtitle = "enter envia"
             yield Mensagem(id="msg", soft_wrap=True, show_line_numbers=False, compact=True, placeholder="escreva aqui…")
-            yield Static("shift+enter quebra  ·  ↑ anterior  ·  /revisão  /rascunhos  /meta  /novo  /limpar", id="dica-msg")
+            yield Static("shift+enter quebra  ·  ↑ anterior  ·  /revisão  /rascunhos  /meta  /entrevista  /novo  /limpar", id="dica-msg")
 
     def on_mount(self) -> None:
         self._cache: dict = {}
@@ -195,8 +195,10 @@ class JanelaConversa(Janela):
             t = Text.assemble(("● ", a.cor("mudo")), ("agente não encontrado: pressione M para escolher outro CLI", a.cor("mudo")))
         else:
             rot = a.mestre_rotulo()
+            p = C.perfil(a.b)
+            extra = " · proposta pronta no Status (alt+8)" if p.get("proposta_mestre") else ""
             t = Text.assemble(("● ", a.cor("cyan")), (f"Mestre conectado via {rot}. Fala em {classe['tema'].split(',')[0]} "
-                                                      f"(sua classe)." if classe else f"Mestre conectado via {rot}.",
+                                                      f"(sua classe){extra}." if classe else f"Mestre conectado via {rot}{extra}.",
                                                       a.cor("mudo")))
         return D.juntar([t, Text("─" * w, style=a.cor("linha"))])
 
@@ -451,6 +453,9 @@ class PaginaTaverna(Pagina):
             return
         if cmd == "/limpar":
             self.app.pedir("limpar_taverna", {}, lambda ok, _: ok and self.app.avisar("conversa apagada"))
+            return
+        if cmd == "/entrevista":
+            self.app.iniciar_entrevista_perfil()
             return
         m = self.app.mestre
         if m is None or self.app.mestre_estado() == "ausente":

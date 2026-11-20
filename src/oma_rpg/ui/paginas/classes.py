@@ -9,6 +9,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 
 from oma_rpg.nucleo import consultas as C
+from oma_rpg.nucleo.regras import ATTR_SIGLAS
 from oma_rpg.ui import desenho as D
 from oma_rpg.ui.base import Janela, Pagina
 from oma_rpg.ui.icones import ic
@@ -31,7 +32,10 @@ class CaixaClasse(Janela):
 
     def pintar(self) -> None:
         c = self.app.cfg.classe(self.cid)
-        self.titulo(f"{ic(self.cid)} {c['nome']}", f"hp {c['hp']} · mana {c['mp']}")
+        mods = self.app.cfg.classe_atributos(self.cid)
+        pos = [f"+1 {ATTR_SIGLAS[k]}" for k, v in mods.items() if v > 0]
+        neg = [f"{v} {ATTR_SIGLAS[k]}" for k, v in mods.items() if v < 0]
+        self.titulo(f"{ic(self.cid)} {c['nome']}", f"hp {c['hp']} · mp {c['mp']} · {' '.join(pos + neg)}")
         self.styles.border_title_color = self.app.cor(c["cor"])
         self.query_one(Pintado).pintar()
 

@@ -182,5 +182,15 @@ def test_cli_na_taverna_pede_e_espera_o_jc(com_heroi, cfg, tmp_path):
         t.join(30)
         d = json.loads(resultado["r"].stdout)
         assert d["ok"] and [i["nome"] for i in d["dados"]["itens"]] == ["a.txt"]
+
+        pf = subprocess.run([sys.executable, "-m", "oma_rpg", "perfil",
+                             "--estrategia", "Foco em blocos de 25m com revisão ativa.",
+                             "--atributos", "for=0,agi=2,vig=2,int=3,con=3,pre=1",
+                             "--pericias", "Python,Inglês", "--json"],
+                            capture_output=True, text=True, timeout=30, env=env)
+        assert pf.returncode == 0, pf.stderr
+        dp = json.loads(pf.stdout)
+        assert dp["ok"] and dp["dados"]["entrevista_estado"] == "concluida"
+        assert dp["dados"]["proposta"]["pericias"] == ["Python", "Inglês"]
     finally:
         s.encerrar()

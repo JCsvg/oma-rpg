@@ -188,90 +188,162 @@ class Jogo:
         self.b.x("INSERT INTO efeitos (tipo, valor, origem, criado) VALUES (?,?,?,?)", (tipo, valor, origem, self.agora()))
 
     @staticmethod
-    def calcular_iniciais_perfil(p: dict) -> tuple[dict[str, int], list[str], str]:
-        """Calcula atributos iniciais (1..6), perícias iniciais e um relatório legível a partir do questionário."""
-        attrs = {"for": 1, "agi": 1, "vig": 1, "int": 1, "con": 1, "pre": 1}
+    def calcular_personalidade_perfil(p: dict) -> tuple[dict[str, int], list[str], str]:
+        """Distribui 5 pontos de personalidade nos 6 atributos (base 1, teto 3, podendo tirar -1 para 0), até 5 perícias nível 1 e relatório."""
+        attrs = {k: 1 for k in regras.ATTR_CHAVES}
+        afinidade = {k: 0.0 for k in regras.ATTR_CHAVES}
+        penalidade = {k: 0.0 for k in regras.ATTR_CHAVES}
         treina = bool(p.get("treina"))
         freq = str(p.get("treino_freq") or "").lower()
         tipo_t = str(p.get("treino_tipo") or "").lower()
         if treina:
             if any(x in freq for x in ("2x", "todo", "diar", "6", "7", "5")):
-                attrs["for"] += 2
-                attrs["vig"] += 2
-                attrs["agi"] += 1
+                afinidade["vig"] += 3.0
+                afinidade["for"] += 2.5
+                afinidade["agi"] += 1.5
             elif any(x in freq for x in ("3", "4")):
-                attrs["for"] += 1
-                attrs["vig"] += 1
+                afinidade["vig"] += 2.0
+                afinidade["for"] += 1.5
             else:
-                attrs["vig"] += 1
-            if any(x in tipo_t for x in ("corrida", "luta", "boxe", "muay", "futebol", "natação", "natacao", "ciclismo", "cardio")):
-                attrs["agi"] += 1
+                afinidade["vig"] += 1.0
+            if any(x in tipo_t for x in ("corrida", "luta", "boxe", "muay", "futebol", "natação", "natacao", "ciclismo", "cardio", "esporte")):
+                afinidade["agi"] += 2.0
             if any(x in tipo_t for x in ("muscul", "academia", "peso", "calistenia", "cross")):
-                attrs["for"] += 1
+                afinidade["for"] += 2.0
+        else:
+            penalidade["for"] += 1.5
+            penalidade["vig"] += 0.5
+        vida = str(p.get("estilo_vida") or "").lower()
+        if any(x in vida for x in ("sedent", "inativ")):
+            penalidade["vig"] += 2.0
+            penalidade["for"] += 1.5
+        elif any(x in vida for x in ("muito", "ativo", "intenso")):
+            afinidade["vig"] += 2.5
+            afinidade["agi"] += 1.5
+        elif "moderad" in vida:
+            afinidade["vig"] += 1.0
         try:
             alt = int(p.get("altura_cm") or 0)
             peso = float(p.get("peso_kg") or 0)
             if 100 <= alt <= 230 and 35 <= peso <= 200:
                 imc = peso / ((alt / 100) ** 2)
                 if 18.5 <= imc <= 25.5:
-                    attrs["vig"] += 1
+                    afinidade["vig"] += 1.5
                 if treina and peso >= 75:
-                    attrs["for"] += 1
+                    afinidade["for"] += 1.0
         except (ValueError, TypeError):
             pass
+        sono = str(p.get("sono") or "").lower()
+        if any(x in sono for x in ("irregular", "pouco", "insônia", "insonia", "ruim", "péssim", "pessim", "4", "5")):
+            penalidade["vig"] += 1.5
+            penalidade["con"] += 1.0
+        elif any(x in sono for x in ("7", "8", "9", "bom", "regular", "ótimo", "otimo")):
+            afinidade["vig"] += 1.5
+            afinidade["con"] += 1.5
         estudo = str(p.get("tempo_estudo") or "").lower()
-        if any(x in estudo for x in ("4", "5", "6", "7", "8", "3")):
-            attrs["int"] += 2
-            attrs["con"] += 1
+        if any(x in estudo for x in ("3", "4", "5", "6", "7", "8")):
+            afinidade["int"] += 3.0
+            afinidade["con"] += 1.5
         elif any(x in estudo for x in ("1", "2")):
-            attrs["int"] += 1
+            afinidade["int"] += 1.5
         atencao = str(p.get("atencao") or "").lower()
-        if any(x in atencao for x in ("tdah", "dificil", "difícil", "distra", "baixa", "sim")):
-            attrs["agi"] += 1
-        elif any(x in atencao for x in ("alta", "boa", "foco")):
-            attrs["con"] += 2
-        tudo = " ".join(str(p.get(k) or "") for k in ("ocupacao", "objetivos", "estilo_estudo", "treino_tipo")).lower()
+        if any(x in atencao for x in ("alta", "boa", "focad", "estável", "estavel")):
+            afinidade["con"] += 2.5
+        elif any(x in atencao for x in ("tdah", "dificil", "difícil", "distra", "baixa", "sim")):
+            afinidade["agi"] += 1.5
+            penalidade["con"] += 2.0
+        dif_geral = " ".join(str(p.get(k) or "") for k in ("dificuldade_estudo", "dificuldade_metas", "obstaculos")).lower()
+        if any(x in dif_geral for x in ("procrast", "começar", "comecar", "manter", "constân", "constan", "prazo", "desist", "trava")):
+            penalidade["con"] += 1.5
+        elif any(x in dif_geral for x in ("pouca", "nenhuma", "cumpro", "consigo")):
+            afinidade["con"] += 2.0
+            afinidade["for"] += 1.0
+        estilo = str(p.get("estilo_estudo") or "").lower()
+        if any(x in estilo for x in ("prátic", "pratic", "exerc", "projet", "código", "codigo")):
+            afinidade["agi"] += 1.5
+            afinidade["int"] += 1.0
+        if any(x in estilo for x in ("resumo", "leitura", "livro", "anota", "mapa", "revis", "feynman")):
+            afinidade["int"] += 1.5
+            afinidade["con"] += 1.0
+        if any(x in estilo for x in ("grupo", "vídeo", "video", "aula", "explic", "conversa")):
+            afinidade["pre"] += 1.5
+        bloco = str(p.get("tamanho_bloco") or "").lower()
+        if any(x in bloco for x in ("2+", "long", "50", "60")):
+            afinidade["con"] += 1.5
+        elif any(x in bloco for x in ("1 ", "25", "curto")):
+            afinidade["agi"] += 1.0
+        tudo = " ".join(str(p.get(k) or "") for k in ("ocupacao", "objetivos", "hobbies", "estilo_estudo", "treino_tipo")).lower()
+        if any(x in tudo for x in ("program", "código", "codigo", "python", "dev", "comput", "software", "tcc",
+                                   "teoria", "algorit", "matem", "xadrez", "leitura", "pesquis")):
+            afinidade["int"] += 2.0
+        if any(x in tudo for x in ("inglês", "ingles", "idioma", "escrev", "redação", "artigo", "apresenta",
+                                   "palestra", "design", "arte", "música", "musica", "teatro", "negócio", "negocio",
+                                   "empreend", "estágio", "estagio", "comunica")):
+            afinidade["pre"] += 2.0
+        else:
+            penalidade["pre"] += 0.8
+        if any(x in tudo for x in ("jogo", "game", "esporte", "corrida", "trilha", "desenho", "culin")):
+            afinidade["agi"] += 1.0
+
+        ordem_empate = {k: idx for idx, k in enumerate(("int", "con", "vig", "agi", "for", "pre"))}
+        for _ in range(5):
+            cands = [k for k in regras.ATTR_CHAVES if attrs[k] < 3]
+            melhor = max(cands, key=lambda k: (afinidade[k] - penalidade[k] - 2.0 * (attrs[k] - 1), -ordem_empate[k]))
+            attrs[melhor] += 1
+        fracos = [k for k in regras.ATTR_CHAVES if attrs[k] == 1 and penalidade[k] >= 1.5]
+        fortes = [k for k in regras.ATTR_CHAVES if attrs[k] < 3 and penalidade[k] < 1.0]
+        if fracos and fortes:
+            w = max(fracos, key=lambda k: (penalidade[k] - afinidade[k], ordem_empate[k]))
+            s = max(fortes, key=lambda k: (afinidade[k] - penalidade[k] - 2.0 * (attrs[k] - 1), -ordem_empate[k]))
+            if w != s:
+                attrs[w] -= 1
+                attrs[s] += 1
+
         pericias: list[str] = []
         bruto_p = p.get("pericias_iniciais") or ""
         for item in str(bruto_p).split(","):
-            nome = item.strip()[:30]
-            if nome and nome not in pericias:
+            nome = item.strip()[:40]
+            if nome and nome.lower() not in {x.lower() for x in pericias}:
                 pericias.append(nome)
         mapa = (
-            (("program", "código", "codigo", "python", "dev", "comput", "software", "tcc"), ("Programação", "int")),
-            (("teoria", "algorit", "comp", "matem", "cálculo", "calculo", "lógica", "logica"), ("Raciocínio Lógico", "int")),
-            (("inglês", "ingles", "idioma", "língua", "lingua", "espanhol"), ("Inglês", "pre")),
-            (("game", "jogo", "rpg", "godot", "unity"), ("Game Design", "int")),
-            (("escrev", "escrita", "redação", "artigo", "tcc", "texto"), ("Escrita", "pre")),
-            (("apresenta", "falar", "palestra", "reunião", "oratória"), ("Comunicação", "pre")),
-            (("design", "ui", "ux", "arte", "desenho"), ("Design", "con")),
+            (("program", "código", "codigo", "python", "dev", "comput", "software", "tcc"), "Programação"),
+            (("teoria", "algorit", "comp", "matem", "cálculo", "calculo", "lógica", "logica"), "Raciocínio Lógico"),
+            (("inglês", "ingles", "idioma", "língua", "lingua", "espanhol"), "Inglês"),
+            (("game", "jogo", "rpg", "godot", "unity"), "Game Design"),
+            (("escrev", "escrita", "redação", "artigo", "tcc", "texto"), "Escrita"),
+            (("apresenta", "falar", "palestra", "reunião", "oratória"), "Comunicação"),
+            (("design", "ui", "ux", "arte", "desenho"), "Design"),
+            (("música", "musica", "violão", "piano", "guitarra"), "Música"),
+            (("leitura", "livro", "pesquis", "artigo"), "Pesquisa"),
         )
-        for chaves, (per, attr_b) in mapa:
-            if any(c in tudo for c in chaves):
-                if per not in pericias:
-                    pericias.append(per)
-                attrs[attr_b] = min(6, attrs[attr_b] + 1)
-        if treina and "Atletismo" not in pericias and "Musculação" not in pericias:
+        for chaves, per in mapa:
+            if any(c in tudo for c in chaves) and per.lower() not in {x.lower() for x in pericias}:
+                pericias.append(per)
+        if treina and not any(x.lower() in {"atletismo", "musculação"} for x in pericias):
             pericias.append("Musculação" if "muscul" in tipo_t or "academia" in tipo_t else "Atletismo")
-        vida = str(p.get("estilo_vida") or "").lower()
-        if any(x in vida for x in ("muito", "ativo", "intenso")):
-            attrs["vig"] += 1
-            attrs["agi"] += 1
-        sono = str(p.get("sono") or "").lower()
-        if any(x in sono for x in ("7", "8", "9", "bom", "regular")):
-            attrs["con"] += 1
-        for k in attrs:
-            attrs[k] = max(1, min(6, attrs[k]))
         partes = [
             f"Ocupação: {p.get('ocupacao') or '-'}",
             f"Objetivos: {p.get('objetivos') or '-'}",
-            f"Físico: {p.get('altura_cm') or '-'} cm, {p.get('peso_kg') or '-'} kg · Estilo de vida: {p.get('estilo_vida') or '-'} · Sono: {p.get('sono') or '-'}",
+            f"Hobbies: {p.get('hobbies') or '-'}",
+            f"Físico: {p.get('altura_cm') or '-'} cm, {p.get('peso_kg') or '-'} kg · Vida: {p.get('estilo_vida') or '-'} · Sono: {p.get('sono') or '-'}",
             "Treino: " + (f"{p.get('treino_tipo') or 'sim'} ({p.get('treino_freq') or 'regular'})" if treina else "não"),
             f"Estudo: {p.get('tempo_estudo') or '-'}/dia · Blocos: {p.get('tamanho_bloco') or '-'} · Estilo: {p.get('estilo_estudo') or '-'}",
+            f"Dificuldades: estudo ({p.get('dificuldade_estudo') or '-'}) · metas ({p.get('dificuldade_metas') or '-'})",
             f"Atenção/foco: {p.get('atencao') or '-'} · Travas: {p.get('obstaculos') or '-'}",
             f"Rotina: {p.get('rotina') or '-'}",
         ]
-        return attrs, pericias[:8], "\n".join(partes)
+        return attrs, pericias[:5], "\n".join(partes)
+
+    @staticmethod
+    def calcular_iniciais_perfil(p: dict, classe: str | None = None, cfg=None) -> tuple[dict[str, int], list[str], str]:
+        """Devolve atributos finais (personalidade + classe), até 5 perícias de nível 1 e o relatório do perfil."""
+        pers, pericias, relatorio = Jogo.calcular_personalidade_perfil(p)
+        if classe and cfg is not None and classe in cfg["classes"]:
+            mods = cfg.classe_atributos(classe)
+            attrs = {k: pers[k] + mods[k] for k in regras.ATTR_CHAVES}
+        else:
+            attrs = dict(pers)
+        return attrs, pericias, relatorio
 
     # ------------------------------------------------------------ herói
     def criar_heroi(self, nome, classe, perfil: dict | None = None) -> dict:
@@ -282,14 +354,17 @@ class Jogo:
             raise ErroJogo("o herói já existe")
         cls = self.cfg["classes"][classe]
         agora = self.agora()
-        attrs = {"for": 1, "agi": 1, "vig": 1, "int": 1, "con": 1, "pre": 1}
+        mods = self.cfg.classe_atributos(classe)
+        pers = {k: 1 for k in regras.ATTR_CHAVES}
         per_ini: list[str] = []
         relatorio = ""
-        if isinstance(perfil, dict) and perfil:
-            attrs, per_ini, relatorio = self.calcular_iniciais_perfil(perfil)
+        tem_perfil = isinstance(perfil, dict) and any(perfil.get(k) for k in perfil if k not in ("altura_cm", "peso_kg", "treina") or perfil.get(k))
+        if tem_perfil:
+            pers, per_ini, relatorio = self.calcular_personalidade_perfil(perfil)
+        attrs = {k: pers[k] + mods[k] for k in regras.ATTR_CHAVES}
         bonus = regras.bonus_atributos(attrs)
-        hp_ini = int(cls["hp"] + bonus["hp_max"])
-        mp_ini = int(cls["mp"] + bonus["mp_max"])
+        hp_ini = max(10, int(cls["hp"] + bonus["hp_max"]))
+        mp_ini = max(0, int(cls["mp"] + bonus["mp_max"]))
         with self.b.transacao():
             self.b.x("INSERT INTO heroi (id, nome, classe, hp, mp, criado, attr_for, attr_agi, attr_vig, attr_int, "
                      "attr_con, attr_pre) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -297,44 +372,160 @@ class Jogo:
                       attrs["int"], attrs["con"], attrs["pre"]))
             self.b.x("INSERT OR IGNORE INTO posses (item, em) VALUES ('tema_verde', ?)", (agora,))
             self.b.definir_meta("dia", self.hoje())
-            if isinstance(perfil, dict) and perfil:
-                self._gravar_perfil(perfil, relatorio, agora)
-            for pnome in per_ini:
+            if tem_perfil:
+                self._gravar_perfil(perfil, relatorio, agora, pers, "pendente")
+            for pnome in per_ini[:5]:
                 self.b.x("INSERT OR IGNORE INTO pericias (nome, xp, nivel, estado, origem, criada) "
                          "VALUES (?, 0, 1, 'aprovada', 'perfil', ?)", (pnome, agora))
         self._registro("heroi", f"{nome} entrou como {cls['nome']}")
         self.emitir({"evento": "heroi"})
-        return {"nome": nome, "classe": classe, "atributos": attrs, "pericias": per_ini}
+        return {"nome": nome, "classe": classe, "atributos": attrs, "personalidade": pers, "pericias": per_ini[:5]}
 
-    def _gravar_perfil(self, p: dict, relatorio: str, agora: float) -> None:
-        self.b.x("INSERT INTO perfil (id, ocupacao, objetivos, altura_cm, peso_kg, treina, treino_tipo, treino_freq, "
-                 "tempo_estudo, atencao, estilo_estudo, rotina, estilo_vida, sono, obstaculos, tamanho_bloco, relatorio, atualizado) "
-                 "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    def _gravar_perfil(self, p: dict, relatorio: str, agora: float, pers: dict | None = None,
+                       entrevista_estado: str | None = None) -> None:
+        atual = C.perfil(self.b)
+        pers_json = json.dumps(pers, ensure_ascii=False) if pers is not None else str(atual.get("personalidade") or "")
+        estado_ent = entrevista_estado if entrevista_estado is not None else str(atual.get("entrevista_estado") or "")
+        self.b.x("INSERT INTO perfil (id, ocupacao, objetivos, hobbies, altura_cm, peso_kg, treina, treino_tipo, treino_freq, "
+                 "tempo_estudo, dificuldade_estudo, dificuldade_metas, atencao, estilo_estudo, rotina, estilo_vida, sono, "
+                 "obstaculos, tamanho_bloco, pericias_iniciais, personalidade, relatorio, perfil_mestre, proposta_mestre, "
+                 "entrevista_estado, atualizado) "
+                 "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                  "ON CONFLICT(id) DO UPDATE SET ocupacao=excluded.ocupacao, objetivos=excluded.objetivos, "
-                 "altura_cm=excluded.altura_cm, peso_kg=excluded.peso_kg, treina=excluded.treina, "
+                 "hobbies=excluded.hobbies, altura_cm=excluded.altura_cm, peso_kg=excluded.peso_kg, treina=excluded.treina, "
                  "treino_tipo=excluded.treino_tipo, treino_freq=excluded.treino_freq, "
-                 "tempo_estudo=excluded.tempo_estudo, atencao=excluded.atencao, "
+                 "tempo_estudo=excluded.tempo_estudo, dificuldade_estudo=excluded.dificuldade_estudo, "
+                 "dificuldade_metas=excluded.dificuldade_metas, atencao=excluded.atencao, "
                  "estilo_estudo=excluded.estilo_estudo, rotina=excluded.rotina, "
                  "estilo_vida=excluded.estilo_vida, sono=excluded.sono, "
                  "obstaculos=excluded.obstaculos, tamanho_bloco=excluded.tamanho_bloco, "
-                 "relatorio=excluded.relatorio, atualizado=excluded.atualizado",
+                 "pericias_iniciais=excluded.pericias_iniciais, personalidade=excluded.personalidade, "
+                 "relatorio=excluded.relatorio, entrevista_estado=excluded.entrevista_estado, atualizado=excluded.atualizado",
                  (texto(p.get("ocupacao"), "ocupação", 120), texto(p.get("objetivos"), "objetivos", 300),
+                  texto(p.get("hobbies"), "hobbies", 200),
                   int(p.get("altura_cm") or 0), float(p.get("peso_kg") or 0), 1 if p.get("treina") else 0,
                   texto(p.get("treino_tipo"), "tipo de treino", 120), texto(p.get("treino_freq"), "frequência de treino", 60),
-                  texto(p.get("tempo_estudo"), "tempo de estudo", 60), texto(p.get("atencao"), "atenção", 120),
+                  texto(p.get("tempo_estudo"), "tempo de estudo", 60),
+                  texto(p.get("dificuldade_estudo"), "dificuldade de estudo", 180),
+                  texto(p.get("dificuldade_metas"), "dificuldade com metas", 180),
+                  texto(p.get("atencao"), "atenção", 120),
                   texto(p.get("estilo_estudo"), "estilo de estudo", 180), texto(p.get("rotina"), "rotina", 180),
                   texto(p.get("estilo_vida"), "estilo de vida", 80), texto(p.get("sono"), "sono", 60),
                   texto(p.get("obstaculos"), "obstáculos", 180), texto(p.get("tamanho_bloco"), "tamanho de bloco", 80),
-                  relatorio, agora))
+                  texto(p.get("pericias_iniciais"), "perícias iniciais", 200),
+                  pers_json, relatorio, str(atual.get("perfil_mestre") or ""), str(atual.get("proposta_mestre") or ""),
+                  estado_ent, agora))
 
     def salvar_perfil(self, **a) -> dict:
         self._h()
-        _, _, relatorio = self.calcular_iniciais_perfil(a)
+        _, _, relatorio = self.calcular_personalidade_perfil(a)
         agora = self.agora()
         with self.b.transacao():
             self._gravar_perfil(a, relatorio, agora)
         self.emitir({"evento": "perfil"})
         return C.perfil(self.b)
+
+    def salvar_entrevista(self, estrategia=None, notas=None, atributos=None, pericias=None) -> dict:
+        """Grava o resultado do 2º questionário feito pelo Mestre e opcionalmente uma proposta para o jogador aprovar."""
+        self._h()
+        est = texto(estrategia if estrategia is not None else notas, "estratégia", 1500, obrigatorio=True)
+        proposta: dict = {}
+        if atributos is not None:
+            if isinstance(atributos, str):
+                parsed: dict[str, int] = {}
+                for parte in atributos.split(","):
+                    if "=" not in parte:
+                        raise ErroJogo("atributos: use for=1,agi=2,vig=2,int=3,con=2,pre=1")
+                    k, v = parte.split("=", 1)
+                    try:
+                        parsed[k.strip().lower()] = int(v.strip())
+                    except ValueError as e:
+                        raise ErroJogo("atributos: valores precisam ser inteiros") from e
+                atributos = parsed
+            val = regras.validar_personalidade(atributos)
+            if val is None:
+                raise ErroJogo("atributos: 6 chaves (for,agi,vig,int,con,pre) entre 0 e 3 somando 11")
+            proposta["atributos"] = val
+        if pericias is not None:
+            if isinstance(pericias, str):
+                lista_p = [x.strip() for x in pericias.split(",") if x.strip()]
+            elif isinstance(pericias, list):
+                lista_p = [str(x).strip() for x in pericias if str(x).strip()]
+            else:
+                raise ErroJogo("pericias: lista ou texto separado por vírgula")
+            if len(lista_p) > 5:
+                raise ErroJogo("pericias: no máximo 5 perícias iniciais")
+            proposta["pericias"] = [texto(x, "perícia", 40, obrigatorio=True) for x in lista_p]
+        agora = self.agora()
+        with self.b.transacao():
+            atual = C.perfil(self.b)
+            if not atual:
+                self._gravar_perfil({}, "", agora, {k: 1 for k in regras.ATTR_CHAVES}, "concluida")
+            prop_json = json.dumps(proposta, ensure_ascii=False) if proposta else ""
+            self.b.x("UPDATE perfil SET perfil_mestre = ?, proposta_mestre = ?, entrevista_estado = 'concluida', atualizado = ? "
+                     "WHERE id = 1", (est, prop_json, agora))
+        self.emitir({"evento": "perfil", "proposta": bool(proposta)})
+        return {"entrevista_estado": "concluida", "perfil_mestre": est, "proposta": proposta or None}
+
+    def aplicar_proposta_perfil(self) -> dict:
+        """Aplica a proposta de atributos (5 pts, 0..3) e até 5 perícias do Mestre, mantendo bônus de classe e nível."""
+        h = self._h()
+        p = C.perfil(self.b)
+        bruto = p.get("proposta_mestre") or ""
+        if not bruto:
+            raise ErroJogo("nenhuma proposta pendente")
+        try:
+            prop = json.loads(bruto)
+        except ValueError as e:
+            raise ErroJogo("proposta inválida") from e
+        mods = self.cfg.classe_atributos(h["classe"])
+        antiga_pers = None
+        if p.get("personalidade"):
+            try:
+                antiga_pers = json.loads(p["personalidade"])
+            except ValueError:
+                antiga_pers = None
+        if not isinstance(antiga_pers, dict):
+            antiga_pers = {k: 1 for k in regras.ATTR_CHAVES}
+        agora = self.agora()
+        novos_attrs = {k: int(h[f"attr_{k}"]) for k in regras.ATTR_CHAVES}
+        nova_pers_str = str(p.get("personalidade") or "")
+        with self.b.transacao():
+            if "atributos" in prop:
+                nova_pers = regras.validar_personalidade(prop["atributos"])
+                if nova_pers is None:
+                    raise ErroJogo("proposta de atributos inválida")
+                for k in regras.ATTR_CHAVES:
+                    novos_attrs[k] = int(h[f"attr_{k}"]) - int(antiga_pers.get(k, 1)) + nova_pers[k]
+                # Se ainda não tinha personalidade registrada, garante coerência com a classe atual
+                if not p.get("personalidade"):
+                    pa = int(self.cfg["heroi"].get("pontos_attr_nivel", 2))
+                    gastos = max(0, (int(h["nivel"]) - 1) * pa - int(h["pontos_attr"] or 0))
+                    if gastos == 0:
+                        novos_attrs = {k: nova_pers[k] + mods[k] for k in regras.ATTR_CHAVES}
+                self.b.x("UPDATE heroi SET attr_for=?, attr_agi=?, attr_vig=?, attr_int=?, attr_con=?, attr_pre=? WHERE id=1",
+                         tuple(novos_attrs[k] for k in regras.ATTR_CHAVES))
+                nova_pers_str = json.dumps(nova_pers, ensure_ascii=False)
+                self._ganho("perfil", "perfil calibrado pelo Mestre")
+            pers_aplicadas: list[str] = []
+            for pnome in (prop.get("pericias") or [])[:5]:
+                ex = self.b.um("SELECT id, estado FROM pericias WHERE lower(nome) = lower(?)", (pnome,))
+                if ex is None:
+                    self.b.x("INSERT INTO pericias (nome, xp, nivel, estado, origem, criada) VALUES (?, 0, 1, 'aprovada', 'perfil', ?)",
+                             (pnome, agora))
+                elif ex["estado"] != "aprovada":
+                    self.b.x("UPDATE pericias SET estado = 'aprovada' WHERE id = ?", (ex["id"],))
+                pers_aplicadas.append(pnome)
+            self.b.x("UPDATE perfil SET personalidade = ?, proposta_mestre = '', atualizado = ? WHERE id = 1",
+                     (nova_pers_str, agora))
+        self.emitir({"evento": "perfil", "aplicada": True})
+        return {"atributos": novos_attrs, "pericias": pers_aplicadas}
+
+    def descartar_proposta_perfil(self) -> dict:
+        self._h()
+        self.b.x("UPDATE perfil SET proposta_mestre = '' WHERE id = 1")
+        self.emitir({"evento": "perfil"})
+        return {"ok": True}
 
     def gastar_atributo(self, attr=None) -> dict:
         h = self._h()
@@ -396,10 +587,14 @@ class Jogo:
         if h["bits"] < custo:
             raise ErroJogo(f"faltam {custo - h['bits']} bits")
         perdidos = int(self.b.escalar("SELECT SUM(custo) FROM skills", (), 0))
+        ant_mod = self.cfg.classe_atributos(h["classe"])
+        nov_mod = self.cfg.classe_atributos(classe)
+        novos = {k: int(h[f"attr_{k}"]) - ant_mod[k] + nov_mod[k] for k in regras.ATTR_CHAVES}
         with self.b.transacao():
             self.b.x("DELETE FROM skills")
             self.b.x("DELETE FROM efeitos")
-            self.b.x("UPDATE heroi SET classe = ? WHERE id = 1", (classe,))
+            self.b.x("UPDATE heroi SET classe = ?, attr_for=?, attr_agi=?, attr_vig=?, attr_int=?, attr_con=?, attr_pre=? WHERE id = 1",
+                     (classe, *(novos[k] for k in regras.ATTR_CHAVES)))
             if custo:
                 self._ganho("classe", "troca de classe", bits=-custo)
             self._ganho("classe", f"agora {self.cfg['classes'][classe]['nome']}")  # reajusta HP e MP ao máximo novo
@@ -1345,10 +1540,10 @@ class Jogo:
                 self.b.x("UPDATE heroi SET ultima_perda = 0 WHERE id = 1")
                 msg = f"+{hp} de HP de volta"
             elif ef == "cura":
-                hp = int(valor + P["cura_extra"])
+                hp = max(0, int(valor + P["cura_extra"]))
                 msg = "HP recuperado"
             elif ef == "mana_hp":
-                hp = int(valor + P["cura_extra"])
+                hp = max(0, int(valor + P["cura_extra"]))
                 msg = f"{custo} de mana viraram {hp} de HP"
             elif ef == "proxima_quest_xp":
                 self._efeito("proxima_quest_xp", float(valor), skill)

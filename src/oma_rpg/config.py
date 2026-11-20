@@ -75,6 +75,11 @@ class Config(dict):
     def classe(self, cid: str) -> dict:
         return self["classes"][cid]
 
+    def classe_atributos(self, cid: str) -> dict[str, int]:
+        """Devolve o modificador da classe nos 6 atributos (+1 em dois, -1 em um)."""
+        bruto = self.classe(cid).get("atributos") or {}
+        return {k: int(bruto.get(k, 0) or 0) for k in ("for", "agi", "vig", "int", "con", "pre")}
+
     def classes_ordem(self) -> list[str]:
         return sorted(self["classes"], key=lambda c: self["classes"][c]["ordem"])
 

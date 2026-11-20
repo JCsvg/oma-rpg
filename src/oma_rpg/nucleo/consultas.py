@@ -143,11 +143,11 @@ def passivos(b, cfg, dia: str, h=None) -> defaultdict:
 
 
 def hp_max(cfg, h, P) -> int:
-    return int(cfg["classes"][h["classe"]]["hp"] + P["hp_max"])
+    return max(10, int(cfg["classes"][h["classe"]]["hp"] + P["hp_max"]))
 
 
 def mp_max(cfg, h, P) -> int:
-    return int(cfg["classes"][h["classe"]]["mp"] + P["mp_max"])
+    return max(0, int(cfg["classes"][h["classe"]]["mp"] + P["mp_max"]))
 
 
 def teto(cfg, P) -> int:
@@ -487,7 +487,6 @@ def perfil(b) -> dict:
     if r is None:
         return {}
     return {k: r[k] for k in r.keys() if k != "id"}
-    return 0
 
 
 # ------------------------------------------------------------ pastas liberadas para o Mestre

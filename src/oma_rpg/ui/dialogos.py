@@ -1217,18 +1217,20 @@ class AgenteDialogo(Dialogo):
 
 
 class QuestionarioDialogo(Dialogo):
-    """Questionário abrangente sobre o jogador para mapear atributos, perícias e contexto do Mestre."""
+    """Questionário abrangente sobre o jogador para mapear atributos, perícias e iniciar a entrevista do Mestre."""
 
     DEFAULT_CSS = css(
         "QuestionarioDialogo",
-        "QuestionarioDialogo #caixa { width: 94; } QuestionarioDialogo #q-scroll { height: auto; max-height: 22; } "
-        "QuestionarioDialogo .campo { height: 1; } QuestionarioDialogo .rot { width: 22; } "
-        "QuestionarioDialogo #previa { height: 4; margin-top: 1; }",
+        "QuestionarioDialogo #caixa { width: 96; } QuestionarioDialogo #q-scroll { height: auto; max-height: 20; } "
+        "QuestionarioDialogo .campo { height: 1; } QuestionarioDialogo .rot { width: 24; } "
+        "QuestionarioDialogo #previa { height: 5; margin-top: 1; }",
     )
-    BINDINGS = [Binding("escape", "cancelar", priority=True)]
+    BINDINGS = [Binding("escape", "cancelar", priority=True), Binding("down", "proximo", show=False),
+                Binding("up", "anterior", show=False)]
     PERGUNTAS = [
         ("ocupacao", "o que você faz", "ex.: Ciência da Computação, estágio, dev"),
         ("objetivos", "principais objetivos", "ex.: passar em Comp-Deci, fechar TCC, treinar"),
+        ("hobbies", "hobbies e lazer", "ex.: jogos, música, leitura, corrida, RPG"),
         ("estilo_vida", "estilo de vida", "sedentário, moderado, ativo, muito ativo"),
         ("altura_cm", "altura (cm)", "ex.: 175"),
         ("peso_kg", "peso (kg)", "ex.: 72"),
@@ -1236,26 +1238,29 @@ class QuestionarioDialogo(Dialogo):
         ("treina", "treina? (s/n)", "s ou n"),
         ("treino_tipo", "qual atividade", "ex.: musculação, corrida, natação"),
         ("treino_freq", "quantas vezes", "ex.: 5x/semana, 1x/dia, 2x/dia"),
-        ("tempo_estudo", "estudo por dia", "ex.: 3h/dia, 2h/dia"),
-        ("atencao", "atenção e foco", "ex.: TDAH / dificuldade de foco, média, alta"),
+        ("tempo_estudo", "tempo livre p/ estudo", "ex.: 3h/dia, 2h/dia"),
+        ("dificuldade_estudo", "dificuldade p/ estudar", "ex.: começar teoria pesada, manter atenção"),
+        ("dificuldade_metas", "dificuldade c/ metas", "ex.: subestimo prazo, procrastino à noite"),
+        ("atencao", "atenção e foco", "ex.: TDAH / distração fácil, média, alta"),
         ("estilo_estudo", "como gosta estudar", "ex.: prática, exercícios, resumos, projetos"),
         ("tamanho_bloco", "blocos preferidos", "ex.: 1 pomodoro (25m), 2+ pomodoros, sem timer"),
-        ("obstaculos", "o que mais te trava", "ex.: começar tarefas grandes, cansaço à noite"),
+        ("obstaculos", "o que mais te trava", "ex.: tarefas grandes sem quebra, cansaço"),
         ("rotina", "rotina / horários", "ex.: manhã estágio, tarde estudo, noite treino"),
-        ("pericias_iniciais", "perícias iniciais", "ex.: Programação, Inglês, Atletismo"),
+        ("pericias_iniciais", "perícias iniciais (até 5)", "ex.: Programação, Inglês, Atletismo"),
     ]
 
-    def __init__(self, inicial: dict | None = None, editando: bool = False) -> None:
+    def __init__(self, inicial: dict | None = None, editando: bool = False, classe: str = "") -> None:
         super().__init__()
         self._inicial = inicial or {}
         self._editando = editando
+        self._classe = classe
 
     def compose(self) -> ComposeResult:
         from textual.containers import VerticalScroll
         p = self._inicial
         with Vertical(id="caixa") as c:
-            c.border_title = "sobre você · questionário completo"
-            yield Static(Text("Mapeia seus atributos iniciais, perícias e dá contexto ao Mestre para criar quests sob medida.",
+            c.border_title = "sobre você · 1º questionário"
+            yield Static(Text("Distribui 5 pontos de personalidade (0..3, antes da classe) e até 5 perícias; depois o Mestre aprofunda no 2º.",
                               style=self.app.cor("mudo")), classes="linha-texto")
             with VerticalScroll(id="q-scroll"):
                 for k, rot, ph in self.PERGUNTAS:
@@ -1267,12 +1272,18 @@ class QuestionarioDialogo(Dialogo):
                         yield Input(str(v or ""), id=f"q-{k}", placeholder=ph)
             yield Pintado(self._previa, id="previa")
             with Horizontal(id="botoes"):
-                yield Botao("enter  salvar perfil", id="salvar", classes="cheio")
+                yield Botao("enter  salvar e continuar", id="salvar", classes="cheio")
                 yield Botao("esc  fechar", id="fechar")
-            yield Static(pe(self.app, [("tab", "próxima"), ("enter", "salva"), ("esc", "cancela")]), classes="pe")
+            yield Static(pe(self.app, [("tab / ↑↓", "navega"), ("enter", "salva"), ("esc", "cancela")]), classes="pe")
 
     def on_mount(self) -> None:
         self.query_one("#q-ocupacao", Input).focus()
+
+    def action_proximo(self) -> None:
+        self.focus_next()
+
+    def action_anterior(self) -> None:
+        self.focus_previous()
 
     def _coletar(self) -> dict:
         d: dict = {}
@@ -1299,15 +1310,26 @@ class QuestionarioDialogo(Dialogo):
         from oma_rpg.nucleo.regras import ATRIBUTOS
         a = self.app
         d = self._coletar() if self.is_mounted and self.query("#q-ocupacao") else self._inicial
-        attrs, pers, _ = Jogo.calcular_iniciais_perfil(d)
-        t_attr = Text()
+        pers, pers_lista, _ = Jogo.calcular_personalidade_perfil(d)
+        attrs, _, _ = Jogo.calcular_iniciais_perfil(d, self._classe or None, a.cfg)
+        t_pers = Text("personalidade (5 pts, 0..3): ", style=a.cor("mudo"))
         for k, _, sig, _ in ATRIBUTOS:
-            t_attr.append(f"{sig} ", style=a.cor("mudo"))
-            t_attr.append(f"{attrs[k]}   ", style=f"bold {a.cor('accent')}")
-        t_per = Text("perícias iniciais: " + (", ".join(pers) if pers else "nenhuma ainda"), style=a.cor("texto"))
-        nota = Text("ao editar depois, altera apenas o relatório de contexto (atributos sobem por nível)", style=a.cor("mudo")) \
-            if self._editando else Text("atributos e perícias iniciais calculados a partir das suas respostas", style=a.cor("mudo"))
-        return D.juntar([t_attr, t_per, nota])
+            t_pers.append(f"{sig} ", style=a.cor("mudo"))
+            t_pers.append(f"{pers[k]}  ", style=f"bold {a.cor('accent')}")
+        linhas = [t_pers]
+        if self._classe and self._classe in a.cfg["classes"]:
+            cls_nome = a.cfg.classe(self._classe)["nome"]
+            t_fim = Text(f"com {cls_nome} (+1/+1/-1): ", style=a.cor("mudo"))
+            for k, _, sig, _ in ATRIBUTOS:
+                t_fim.append(f"{sig} ", style=a.cor("mudo"))
+                t_fim.append(f"{attrs[k]}  ", style=f"bold {a.cor('forte')}")
+            linhas.append(t_fim)
+        linhas.append(Text("perícias iniciais (nível 1, até 5): " + (", ".join(pers_lista) if pers_lista else "nenhuma ainda"),
+                           style=a.cor("texto")))
+        nota = Text("ao editar depois, atualiza o perfil para o Mestre (atributos mantêm pontos de nível)", style=a.cor("mudo")) \
+            if self._editando else Text("ao criar o herói, a Taverna abre para o Mestre conduzir o 2º questionário", style=a.cor("mudo"))
+        linhas.append(nota)
+        return D.juntar(linhas)
 
     def on_input_changed(self, ev: Input.Changed) -> None:
         if ev.input.id.startswith("q-"):

@@ -6,7 +6,7 @@
 
 pkgname=oma-rpg
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="RPG de estudo em TUI no modelo do herdr: pomodoro, quests, nível, vida, mana, classes e skills, com serviço em segundo plano"
 arch=('any')
 url="https://github.com/JCsvg/oma-rpg"

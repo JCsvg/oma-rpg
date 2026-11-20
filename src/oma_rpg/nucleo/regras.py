@@ -16,19 +16,36 @@ import re
 DIFS = {1: "fácil", 2: "média", 3: "difícil"}
 DIAMANTES = {1: "◆◇◇", 2: "◆◆◇", 3: "◆◆◆"}
 ATRIBUTOS = (
-    ("for", "Força", "For", "+3% XP em quests só confirmadas e +1 de cura por ponto acima de 1"),
-    ("agi", "Agilidade", "Agi", "+2% XP de commit e +0,02 no combo máximo por ponto acima de 1"),
-    ("vig", "Vigor", "Vig", "+4 de HP máximo por ponto acima de 1"),
-    ("int", "Intelecto", "Int", "+3% XP de perícia e +2% XP de quest com foco por ponto acima de 1"),
-    ("con", "Consciência", "Con", "+2% XP de pomodoro e +2 de mana máxima por ponto acima de 1"),
-    ("pre", "Presença", "Pre", "+3% de Bits ganhos e +1% de desconto na loja por ponto acima de 1"),
+    ("for", "Força", "For", "+3% XP em quests só confirmadas e +1 de cura por ponto acima de 1 (simétrico abaixo)"),
+    ("agi", "Agilidade", "Agi", "+2% XP de commit e +0,02 no combo máximo por ponto acima de 1 (simétrico abaixo)"),
+    ("vig", "Vigor", "Vig", "+4 de HP máximo por ponto acima de 1 (simétrico abaixo)"),
+    ("int", "Intelecto", "Int", "+3% XP de perícia e +2% XP de quest com foco por ponto acima de 1 (simétrico abaixo)"),
+    ("con", "Consciência", "Con", "+2% XP de pomodoro e +2 de mana máxima por ponto acima de 1 (simétrico abaixo)"),
+    ("pre", "Presença", "Pre", "+3% de Bits ganhos e +1% de desconto na loja por ponto acima de 1 (simétrico abaixo)"),
 )
+ATTR_CHAVES = tuple(k for k, *_ in ATRIBUTOS)
 ATTR_SIGLAS = {k: sig for k, _, sig, _ in ATRIBUTOS}
 
 
+def validar_personalidade(attrs: dict) -> dict[str, int] | None:
+    """Confere a distribuição de personalidade: 6 atributos em 0..3 somando 11 (base 6 + 5 pontos)."""
+    if not isinstance(attrs, dict):
+        return None
+    saida: dict[str, int] = {}
+    for k in ATTR_CHAVES:
+        try:
+            v = int(attrs[k])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if v < 0 or v > 3:
+            return None
+        saida[k] = v
+    return saida if sum(saida.values()) == 11 else None
+
+
 def bonus_atributos(attrs: dict) -> dict:
-    """Converte os 6 atributos do herói em bônus numéricos concretos."""
-    ex = {k: max(0, int(attrs.get(f"attr_{k}", attrs.get(k, 1))) - 1) for k, *_ in ATRIBUTOS}
+    """Converte os 6 atributos do herói em bônus numéricos concretos (simétrico abaixo de 1)."""
+    ex = {k: int(attrs.get(f"attr_{k}", attrs.get(k, 1))) - 1 for k, *_ in ATRIBUTOS}
     return {
         "xp_confirmacao": ex["for"] * 3.0,
         "cura_extra": ex["for"],
@@ -40,7 +57,7 @@ def bonus_atributos(attrs: dict) -> dict:
         "xp_pomodoro": ex["con"] * 2.0,
         "mp_max": ex["con"] * 2,
         "bits": ex["pre"] * 3.0,
-        "desconto_loja": min(25, ex["pre"]),
+        "desconto_loja": max(-25, min(25, ex["pre"])),
     }
 
 
@@ -90,7 +107,7 @@ def xp_quest_concluida(est: int, dif: int, feitos: int, cfg, bonus_pct: float = 
 
 def combo_max(cfg, gamer: bool, extra: float = 0.0) -> float:
     c = cfg["combo"]
-    return round((c["max_gamer"] if gamer else c["max"]) + extra, 2)
+    return max(1.0, round((c["max_gamer"] if gamer else c["max"]) + extra, 2))
 
 
 def combo(seguidos: int, cfg, gamer: bool = False, extra_max: float = 0.0) -> float:
