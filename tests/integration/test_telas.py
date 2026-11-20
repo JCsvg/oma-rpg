@@ -403,7 +403,7 @@ async def test_criar_mistico_tira_a_carta_do_dia(app_vazio):
     app = app_vazio
     async with app.run_test(size=G) as pilot:
         await pilot.pause(0.5)
-        await pilot.press("enter")
+        await pilot.press("tab", "enter")
         assert await esperar(pilot, lambda: type(app.screen).__name__ == "Carta")
         await pilot.press("space")
         await pilot.pause(0.2)
@@ -678,7 +678,13 @@ async def test_criar_heroi_com_questionario_abre_taverna_e_aprova_proposta(app_v
         assert type(app.screen).__name__ == "Criar"
         await pilot.press("down")
         await pilot.pause(0.1)
-        await pilot.press("shift+q")
+        # Pressionar q (minúsculo) não fecha o jogo; escolher a classe com enter também abre Q1
+        await pilot.press("q")
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, QuestionarioDialogo)
+        await pilot.press("escape")
+        await pilot.pause(0.1)
+        await pilot.press("enter")
         await pilot.pause(0.2)
         assert isinstance(app.screen, QuestionarioDialogo)
         app.screen.query_one("#q-ocupacao").value = "Ciência da Computação"

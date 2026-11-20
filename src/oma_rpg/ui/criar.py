@@ -47,7 +47,7 @@ class ListaClasses(Janela):
         yield Lista(self._linha, altura=6, id="criar-lista", cursor_sem_foco=True)
 
     def on_mount(self) -> None:
-        self.titulo("escolha sua classe", "↑↓")
+        self.titulo("escolha sua classe", "↑↓ navega · enter escolhe e abre questionário")
         self.query_one(Lista).definir(self.app.cfg.classes_ordem(), cursor=0)
 
     def _linha(self, cid: str, i: int, est) -> list[Text]:
@@ -70,7 +70,10 @@ class ListaClasses(Janela):
 
     def on_lista_escolhido(self, ev: Lista.Escolhido) -> None:
         ev.stop()
-        self.screen.query_one("#nome", Input).focus()
+        if not self.screen.perfil:
+            self.screen.action_questionario()
+        else:
+            self.screen.query_one("#nome", Input).focus()
 
 
 class Detalhes(Janela):
@@ -185,7 +188,7 @@ class CampoNome(Janela):
             yield Botao("enter  criar herói", id="criar", classes="cheio")
 
     def on_mount(self) -> None:
-        self.titulo("nome do herói", "tab alterna · Q questionário")
+        self.titulo("nome do herói", "tab alterna · enter cria herói · q questionário")
 
 
 class Criar(Screen):
@@ -195,9 +198,9 @@ class Criar(Screen):
     Criar #criar-corpo { height: 1fr; }
     Criar Detalhes { width: 1fr; margin-left: 1; }
     """
-    BINDINGS = [Binding("escape", "sair", priority=True), Binding("tab", "alternar", priority=True),
-                Binding("shift+tab", "alternar", priority=True), Binding("enter", "criar", priority=True),
-                Binding("Q,shift+q", "questionario", show=False),
+    BINDINGS = [Binding("escape", "fechar_criacao", priority=True), Binding("tab", "alternar", priority=True),
+                Binding("shift+tab", "alternar", priority=True),
+                Binding("q,Q,shift+q", "questionario", show=False),
                 Binding("ctrl+right,ctrl+l", "janela('dir')", priority=True), Binding("ctrl+left,ctrl+h", "janela('esq')", priority=True),
                 Binding("ctrl+down,ctrl+j", "janela('baixo')", priority=True), Binding("ctrl+up,ctrl+k", "janela('cima')", priority=True)]
     VIZINHAS = {"criar-classes": {"dir": "criar-detalhes", "baixo": "criar-nome"},
@@ -223,9 +226,9 @@ class Criar(Screen):
         self.query_one("#criar-lista", Lista).focus()
 
     def itens(self) -> list[tuple[str, str, str]]:
-        return [("↑↓", "classe", "noop"), ("tab", "nome", "alternar"),
-                ("Q", "sobre você" + (" ✓" if self.perfil else ""), "questionario"),
-                ("enter", "criar herói", "criar"), ("esc", "sair", "sair")]
+        return [("↑↓", "classe", "noop"), ("enter", "escolhe + Q1" if not self.perfil else "criar", "noop"),
+                ("q", "sobre você" + (" ✓" if self.perfil else ""), "questionario"),
+                ("tab", "nome", "alternar"), ("esc", "sair", "fechar_criacao")]
 
     def action_questionario(self) -> None:
         from oma_rpg.ui.dialogos import QuestionarioDialogo
@@ -235,6 +238,7 @@ class Criar(Screen):
                 self.perfil = res
                 self.query_one("#questionario", Botao).label = "Q  sobre você ✓"
                 self.query_one(Rodape).pintar()
+                self.query_one("#nome", Input).focus()
         classe = self.query_one(Detalhes).classe
         self.app.push_screen(QuestionarioDialogo(self.perfil, classe=classe), depois)
 
@@ -265,8 +269,13 @@ class Criar(Screen):
         classe = self.query_one(Detalhes).classe
         self.dismiss((nome, classe, self.perfil) if self.perfil else (nome, classe))
 
-    def action_sair(self) -> None:
+    def action_fechar_criacao(self) -> None:
         self.dismiss(None)
+
+    def on_input_submitted(self, ev: Input.Submitted) -> None:
+        if ev.input.id == "nome":
+            ev.stop()
+            self.action_criar()
 
     def on_botao_apertado(self, ev: Botao.Apertado) -> None:
         ev.stop()

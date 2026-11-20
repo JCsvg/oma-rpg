@@ -695,7 +695,10 @@ class OmaRpgApp(App[None]):
 
     def action_ciclo(self, passo: int) -> None:
         if len(self.screen_stack) > 1:
-            (self.screen.focus_next if passo > 0 else self.screen.focus_previous)()
+            if hasattr(self.screen, "action_alternar"):
+                self.screen.action_alternar()
+            else:
+                (self.screen.focus_next if passo > 0 else self.screen.focus_previous)()
             return
         vis = self.visiveis()
         atual = self.nome_janela(self.focused)
